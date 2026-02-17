@@ -91,8 +91,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (method === 'semi_automated') {
             // When semi-automated is selected, use the backbone method to determine which parameters to show
-            const backboneMethod = getSelectedBackboneMethod();
-            updateParametersBasedOnBackbone(backboneMethod);
+            const lambdaEGroup = document.getElementById('lambdaE').closest('.slider-group');
+            if (lambdaEGroup) lambdaEGroup.style.display = 'block';
+
+            const lambdaPGroup = document.getElementById('lambdaP').closest('.slider-group');
+            if (lambdaPGroup) lambdaPGroup.style.display = 'block';
+            
         } else {
             // For direct methods, show parameters based on the selected method
             const showKmedoidsParams = method === 'kmedoids';
