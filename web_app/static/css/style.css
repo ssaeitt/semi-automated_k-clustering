@@ -47,19 +47,48 @@ header p {
     font-size: 12px;
 }
 
+/* Container for Sidebar + Plots */
 .main-content {
-    display: grid;
-    grid-template-columns: 350px 1fr;
-    gap: 2rem;
-    background-color: var(--panel-background);
-    border-radius: 10px;
-    box-shadow: 0 2px 10px var(--shadow-color);
-    padding: 2rem;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap; /* Prevents the plot from jumping below */
+    gap: 30px;
+    align-items: flex-start;
+    width: 100%;
+    margin-top: 20px;
 }
 
+/* Fixed Sidebar Width */
 .controls-panel {
-    border-right: 1px solid var(--border-color);
-    padding-right: 2rem;
+    flex: 0 0 350px; /* Forces sidebar to stay exactly 350px wide */
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Flexible Visualization Area */
+.visualization-panel {
+    flex: 1; /* Plotly takes up every remaining pixel of width */
+    min-width: 0; /* This is CRITICAL for Plotly to resize correctly */
+}
+
+/* Ensures graphs fill the panel */
+.plot-container, .plot {
+    width: 100% !important;
+    height: auto;
+    min-height: 500px;
+}
+
+/* Responsive: Only stack on mobile/tablets */
+@media (max-width: 1000px) {
+    .main-content {
+        flex-direction: column !important;
+    }
+    .controls-panel {
+        flex: none;
+        width: 100%;
+    }
 }
 
 .file-upload, .clustering-params {
@@ -203,19 +232,6 @@ h2 {
     width: 100%;
     height: 100%;
     min-height: 400px;
-}
-
-@media (max-width: 1200px) {
-    .main-content {
-        grid-template-columns: 1fr;
-    }
-
-    .controls-panel {
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-        padding-right: 0;
-        padding-bottom: 2rem;
-    }
 }
 
 @media (max-width: 768px) {
