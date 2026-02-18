@@ -475,6 +475,11 @@ def cluster():
     try:
         data = request.json
         method = data.get('method', 'kmeans')
+
+        # This ensures these variables are extracted if they exist in the JS 'params'
+        gamma_block = float(data.get('gamma_block', 0.5))
+        p_value = int(data.get('p', 10)) # Ensure this matches the 'p' sent from JS
+        # New refinement End              
         params = data
         
         # Debug log the parameters
