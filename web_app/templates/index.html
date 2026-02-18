@@ -66,34 +66,31 @@
                         </div>
                     </div>
 
-                    <div class="parameter-sliders">
-                        <div class="slider-group">
-                            <label for="nClusters">Number of Clusters:</label>
-                            <input type="range" id="nClusters" min="1" max="10" value="3" step="1">
-                            <span class="slider-value">3</span>
-                        </div>
+                   <div class="slider-group">
+					   <label for="nClusters">Number of Clusters: <span id="n-clusters-val" class="slider-value">3</span></label>
+					   <input type="range" id="nClusters" min="2" max="10" value="3" step="1" oninput="document.getElementById('n-clusters-val').innerText = this.value">
+				   </div>
 
-                        <div class="slider-group">
-                            <label for="windowSize">Window Size:</label>
-                            <input type="range" id="windowSize" min="1" max="20" value="5" step="1">
-                            <span class="slider-value">5</span>
-                        </div>
+					<div class="slider-group">
+						<label for="windowSize">Window Size: <span id="window-val" class="slider-value">5</span></label>
+						<input type="range" id="windowSize" min="3" max="21" value="5" step="2" oninput="document.getElementById('window-val').innerText = this.value">
+					</div>
                         
 			            <input type="hidden" id="lambdaE" value="1.0">
 			            <input type="hidden" id="lambdaP" value="1.0">
 			            <input type="hidden" id="beta" value="0.5">
 
-                        <div class="kmedoids-params" style="display: none;">
+                        <div class="kmedoids-params" id="kmedoids-extra-ui" style="display: none; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px;">
+							<h3>Inverted-V Physics</h3>
+							
                             <div class="slider-group">
-                                <label for="gammaBlock">Gamma Block:</label>
-                                <input type="range" id="gammaBlock" min="0" max="10" value="1" step="0.1">
-                                <span class="slider-value">1.0</span>
+                                <label for="gammaBlock">Gamma ($\gamma$): <span id="gamma-val" class="slider-value">0.5</span></label>
+                                <input type="range" id="gammaBlock" min="0" max="1" value="0.5" step="0.1" oninput="document.getElementById('gamma-val').innerText = this.value">
                             </div>
 
                             <div class="slider-group">
-                                <label for="p">P (Block Size):</label>
-                                <input type="range" id="p" min="1" max="10" value="4" step="1">
-                                <span class="slider-value">4</span>
+                                <label for="p">P (Block Size): <span id="p-val" class="slider-value">10</span></label>
+                                <input type="range" id="p" min="5" max="30" value="10" step="1" oninput="document.getElementById('p-val').innerText = this.value">
                             </div>
 
                             <div class="extra-metrics-params" style="display: none;">
@@ -129,7 +126,7 @@
         <div class="search-tabs">
 			<!-- The line below is commented out to remove the Web Search option temporarily -->
             <!-- <button class="search-tab active" data-tab="web">Web Search</button> -->
-            <button class="search-tab-active" data-tab="ai">AI Search</button>
+            <button class="search-tab active" data-tab="ai">AI Search</button>
         </div>
         <div class="search-content">
             <div class="ai-search-container">
@@ -174,5 +171,18 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
+
+	<script>
+    // Show/Hide Gamma and P based on the selected method
+		document.getElementById('clusteringMethod').addEventListener('change', function() {
+			const extraParams = document.getElementById('kmedoids-extra-ui');
+			if (this.value === 'kmedoids' || this.value === 'semi_automated') {
+				extraParams.style.display = 'block';
+			} else {
+				extraParams.style.display = 'none';
+			}
+		});
+	</script>
+	
 </body>
 </html> 
