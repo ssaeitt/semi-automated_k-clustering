@@ -44,119 +44,53 @@ document.addEventListener('DOMContentLoaded', function() {
     extraMetricsToggle.addEventListener('change', toggleExtraMetrics);
     
     // Add event listeners to all sliders
+// --- Optimized Slider Listener ---
     Object.entries(sliders).forEach(([key, slider]) => {
-        if (slider) {  // Check if slider exists
+        if (slider && slider.type !== 'hidden') { 
             slider.addEventListener('input', (e) => {
                 const value = parseFloat(e.target.value);
-                e.target.nextElementSibling.textContent = value.toFixed(1);
-                // Log when slider values change to debug
-                console.log(`Slider ${key} changed to ${value}`);
-            });
-        }
-    });
-    
-    // Add a specific listener for Lambda_E, Lambda_P, and Beta to ensure they work
-    ['lambdaE', 'lambdaP', 'beta'].forEach(id => {
-        const slider = document.getElementById(id);
-        if (slider) {
-            slider.addEventListener('change', () => {
-                console.log(`${id} final value: ${slider.value}`);
-                // If updatePlot button is not disabled, we could automatically update
-                if (!updatePlotBtn.disabled && clusteringMethod.value === 'kmeans') {
-                    console.log(`Auto-updating plot because ${id} changed in kmeans mode`);
+                // Look for the span in the same group as the slider
+                const display = e.target.parentElement.querySelector('.slider-value');
+                if (display) {
+                    display.textContent = (key === 'p') ? value : value.toFixed(1);
                 }
             });
         }
     });
 
-    // Function to toggle extra metrics visibility
-    function toggleExtraMetrics(e) {
-        console.log("Extra metrics toggle changed:", e.target.checked);
-        extraMetricsParams.style.display = e.target.checked ? 'block' : 'none';
+    // --- Clean Visibility Logic ---
+    function updateParametersVisibility(method, backbone) {
+        const kmedoidsUI = document.getElementById('kmedoids-extra-ui');
+        
+        // As requested: Only show Gamma and P for pure K-Medoids
+        // It stays hidden for Semi-Automated regardless of the backbone
+        if (kmedoidsUI) {
+            kmedoidsUI.style.display = (method === 'kmedoids') ? 'block' : 'none';
+        }
+
+        // Handle the backbone selector visibility
+        backboneSelector.style.display = (method === 'semi_automated') ? 'block' : 'none';
     }
 
-    // Initialize UI state
-    document.addEventListener('DOMContentLoaded', () => {
-        // Set initial state based on selected method
-        handleMethodChange({ target: clusteringMethod });
-    });
-
-    // Method Change Handler
     function handleMethodChange(e) {
         const method = e.target.value;
         console.log("Method changed to:", method);
         
-        // Show/hide backbone selector for semi-automated method
-        backboneSelector.style.display = method === 'semi_automated' ? 'block' : 'none';
-        
-        if (method === 'semi_automated') {
-            // When semi-automated is selected, use the backbone method to determine which parameters to show
-            const lambdaEGroup = document.getElementById('lambdaE').closest('.slider-group');
-            if (lambdaEGroup) lambdaEGroup.style.display = 'block';
-
-            const lambdaPGroup = document.getElementById('lambdaP').closest('.slider-group');
-            if (lambdaPGroup) lambdaPGroup.style.display = 'block';
-            
-        } else {
-            // For direct methods, show parameters based on the selected method
-            const showKmedoidsParams = method === 'kmedoids';
-            updateParametersVisibility(showKmedoidsParams);
-        }
-        
+        updateParametersVisibility(method, getSelectedBackboneMethod());
         elbowPlotContainer.style.display = 'none';
     }
-    
-    // Get the selected backbone method
+
+    // Helper to find which backbone radio button is checked
     function getSelectedBackboneMethod() {
         const selectedRadio = document.querySelector('input[name="backboneMethod"]:checked');
-        return selectedRadio ? selectedRadio.value : 'kmeans'; // Default to kmeans
+        return selectedRadio ? selectedRadio.value : 'kmeans'; 
     }
     
-    // Backbone Method Change Handler
     function handleBackboneChange(e) {
         const backboneMethod = e.target.value;
         console.log("Backbone method changed to:", backboneMethod);
-        updateParametersBasedOnBackbone(backboneMethod);
+        updateParametersVisibility(clusteringMethod.value, backboneMethod);
     }
-    
-    // Update parameters based on backbone method
-    function updateParametersBasedOnBackbone(method) {
-        const showKmedoidsParams = method === 'kmedoids';
-        updateParametersVisibility(showKmedoidsParams);
-    }
-    
-    // Update parameter visibility based on method
-    function updateParametersVisibility(showKmedoidsParams) {
-        // Always show Lambda_E, Lambda_P, and Beta
-        const lambdaESlider = document.getElementById('lambdaE').closest('.slider-group');
-        const lambdaPSlider = document.getElementById('lambdaP').closest('.slider-group');
-        const betaSlider = document.getElementById('beta').closest('.slider-group');
-        const gammaBlockSlider = document.getElementById('gammaBlock').closest('.slider-group');
-        const pSlider = document.getElementById('p').closest('.slider-group');
-        const extraMetricsToggleParent = extraMetricsToggle.closest('.extra-metrics-toggle');
-        
-        // Always show these parameters
-        lambdaESlider.style.display = 'block';
-        lambdaPSlider.style.display = 'block';
-        betaSlider.style.display = 'block';
-        
-        // Only show these for k-medoids
-        gammaBlockSlider.style.display = showKmedoidsParams ? 'block' : 'none';
-        pSlider.style.display = showKmedoidsParams ? 'block' : 'none';
-        extraMetricsToggleParent.style.display = showKmedoidsParams ? 'block' : 'none';
-        
-        // Show/hide kmedoids container
-        kmedoidsParams.style.display = showKmedoidsParams ? 'block' : 'none';
-        
-        if (!showKmedoidsParams) {
-            extraMetricsToggle.checked = false;
-            extraMetricsParams.style.display = 'none';
-        } else {
-            // If kmedoids, show/hide extra metrics based on checkbox
-            extraMetricsParams.style.display = extraMetricsToggle.checked ? 'block' : 'none';
-        }
-    }
-
     // File Upload Handler
     async function handleFileUpload(e) {
         e.preventDefault();
@@ -594,5 +528,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
         return result;
     }
-    
+
+    handleMethodChange({ target: clusteringMethod });
 }); 
