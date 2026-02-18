@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const modelOptions = document.querySelectorAll('.model-option');
 
     // State
-    let currentTab = 'web';
+    let currentTab = 'ai';
     let selectedModel = 'deepseek/deepseek-r1:free';
     let isSearching = false;
     let currentController = null; // For aborting fetch requests
