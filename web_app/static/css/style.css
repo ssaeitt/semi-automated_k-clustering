@@ -47,47 +47,58 @@ header p {
     font-size: 12px;
 }
 
-/* Container for Sidebar + Plots */
+/* --- UNIFIED DASHBOARD LAYOUT --- */
+
+/* 1. The Wrapper: This forces the side-by-side view */
 .main-content {
     display: flex !important;
     flex-direction: row !important;
-    flex-wrap: nowrap; /* Prevents the plot from jumping below */
+    flex-wrap: nowrap !important; /* Forces them to stay on one line */
     gap: 30px;
     align-items: flex-start;
     width: 100%;
     margin-top: 20px;
 }
 
-/* Fixed Sidebar Width */
+/* 2. The Sidebar: Keep it fixed so it doesn't shrink */
 .controls-panel {
-    flex: 0 0 350px; /* Forces sidebar to stay exactly 350px wide */
-    background: #f8f9fa;
+    flex: 0 0 350px !important; 
+    max-width: 350px;
+    background: #ffffff;
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-/* Flexible Visualization Area */
+/* 3. The Plot Area: This must be flexible with min-width: 0 */
 .visualization-panel {
-    flex: 1; /* Plotly takes up every remaining pixel of width */
-    min-width: 0; /* This is CRITICAL for Plotly to resize correctly */
+    flex: 1 !important; 
+    min-width: 0 !important; /* CRITICAL: Prevents Plotly from expanding past the screen */
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
-/* Ensures graphs fill the panel */
-.plot-container, .plot {
-    width: 100% !important;
-    height: auto;
+/* 4. The Containers: Ensure they fill the flexible area */
+.plot-container {
+    width: 100%;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px var(--shadow-color);
+    padding: 1rem;
     min-height: 500px;
 }
 
-/* Responsive: Only stack on mobile/tablets */
-@media (max-width: 1000px) {
+/* 5. Responsive: Only stack on small laptops and tablets */
+@media (max-width: 1100px) {
     .main-content {
         flex-direction: column !important;
+        flex-wrap: wrap !important;
     }
     .controls-panel {
-        flex: none;
-        width: 100%;
+        flex: 1 1 100% !important;
+        max-width: 100%;
     }
 }
 
