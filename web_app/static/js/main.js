@@ -62,13 +62,15 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateParametersVisibility(method, backbone) {
         const kmedoidsUI = document.getElementById('kmedoids-extra-ui');
         
-        // As requested: Only show Gamma and P for pure K-Medoids
-        // It stays hidden for Semi-Automated regardless of the backbone
-        if (kmedoidsUI) {
-            kmedoidsUI.style.display = (method === 'kmedoids') ? 'block' : 'none';
-        }
+        // The "Logic Gate": Show if main method is kmedoids
+        // OR if we are in semi-automated mode AND the backbone is kmedoids
+        const shouldShow = (method === 'kmedoids') ||
+            (method === 'semi_automated' && backbone === 'kmedoids');
 
-        // Handle the backbone selector visibility
+        if (kmedoidsUI) {
+            kmedoidsUI.style.display = shouldShow ? 'block' : 'none';
+        }
+        // Handle the backbone selector visibility (only for semi-automated)
         backboneSelector.style.display = (method === 'semi_automated') ? 'block' : 'none';
     }
 
