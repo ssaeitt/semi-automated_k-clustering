@@ -123,32 +123,34 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update Plots Handler
     async function updatePlots() {
         const method = clusteringMethod.value;
-        
-        // Get all parameter values from sliders
+        const backbone = getSelectedBackboneMethod(); // Define this clearly at the start
+    
         const params = {
             method: method,
             n_clusters: parseInt(sliders.nClusters.value),
             window_size: parseInt(sliders.windowSize.value),
-            // Always include these parameters for all methods
             lambda_e: parseFloat(sliders.lambdaE.value),
             lambda_p: parseFloat(sliders.lambdaP.value),
             beta: parseFloat(sliders.beta.value)
         };
-        
-        // For semi-automated method, include the backbone method
+
         if (method === 'semi_automated') {
-            params.backbone_method = getSelectedBackboneMethod();
+            params.backbone_method = backbone;
         }
 
-        // Add additional parameters for k-medoids and semi-automated with k-medoids backbone
-        if (method === 'kmedoids' || (method === 'semi_automated' && params.backbone_method === 'kmedoids')) {
-            const extraMetricsEnabled = extraMetricsToggle.checked;
-            Object.assign(params, {
-                delta: extraMetricsEnabled ? parseFloat(sliders.delta.value) : 0.1,
-                threshold: extraMetricsEnabled ? parseFloat(sliders.threshold.value) : 0.1,
-                gamma_block: parseFloat(sliders.gammaBlock.value),
-                p: parseInt(sliders.p.value)
-            });
+        // FIX: Ensure K-Medoids logic triggers correctly for both standalone and backbone
+        if (method === 'kmedoids' || (method === 'semi_automated' && backbone === 'kmedoids')) {
+            params.gamma_block = parseFloat(sliders.gammaBlock.value);
+            params.p = parseInt(sliders.p.value);
+        
+            // Also send extra metrics if the checkbox exists
+            if (extraMetricsToggle && extraMetricsToggle.checked) {
+                params.delta = parseFloat(sliders.delta.value);
+                params.threshold = parseFloat(sliders.threshold.value);
+            } else {
+                params.delta = 0.1; // Default fallbacks
+                params.threshold = 0.1;
+            }
         }
 
         // Log parameters for debugging
