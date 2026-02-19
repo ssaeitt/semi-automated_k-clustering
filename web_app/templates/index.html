@@ -22,10 +22,9 @@
         </header>
 
         <div class="main-content">
-            
             <div class="controls-panel">
                 <div class="file-upload">
-                    <h2>Data Upload</h2>
+                    <h2>1. Data Upload</h2>
                     <p class="small-font"><em>Upload Excel/CSV: "lndt", "dp", "dp_dlndt"</em></p>
                     <form id="uploadForm">
                         <div class="file-input-wrapper">
@@ -36,12 +35,24 @@
                             <label for="sheetName">Sheet Name:</label>
                             <input type="text" id="sheetName" value="Sheet1">
                         </div>
-                        <button type="submit" class="upload-btn">Upload</button>
+                        <button type="submit" class="upload-btn">Upload & Preview</button>
                     </form>
                 </div>
 
+                <div class="data-preview-section" id="preview-controls" style="display: none;">
+                    <h2>2. Data Preview</h2>
+                    <div class="method-selector">
+                        <label for="previewType">Plot Type:</label>
+                        <select id="previewType">
+                            <option value="loglog">Log-Log Plot (Diagnostic)</option>
+                            <option value="normal">Normal Plot (p vs t)</option>
+                            <option value="semilog">Semi-Log Plot (p vs log t)</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="clustering-params">
-                    <h2>Clustering Parameters</h2>
+                    <h2>3. Clustering Parameters</h2>
                     <div class="method-selector">
                         <label for="clusteringMethod">Clustering Method:</label>
                         <select id="clusteringMethod">
@@ -60,19 +71,17 @@
                     </div>
 
                     <div class="slider-group">
-                        <label for="nClusters">Number of Clusters: <span id="n-clusters-val" class="slider-value">3</span></label>
+                        <label for="nClusters">Clusters: <span id="n-clusters-val" class="slider-value">3</span></label>
                         <input type="range" id="nClusters" min="2" max="10" value="3" step="1" oninput="document.getElementById('n-clusters-val').innerText = this.value">
                     </div>
 
                     <div class="slider-group">
-                        <label for="windowSize">Window Size: <span id="window-val" class="slider-value">5</span></label>
+                        <label for="windowSize">Window: <span id="window-val" class="slider-value">5</span></label>
                         <input type="range" id="windowSize" min="2" max="21" value="5" step="1" oninput="document.getElementById('window-val').innerText = this.value">
                     </div>
 
-                    <input type="hidden" id="lambdaE" value="1.0">
-                    <input type="hidden" id="lambdaP" value="1.0">
-                    <input type="hidden" id="beta" value="0.5">
-                    <input type="hidden" id="delta" value="0.1">
+                    <input type="hidden" id="lambdaE" value="1.0"><input type="hidden" id="lambdaP" value="1.0">
+                    <input type="hidden" id="beta" value="0.5"><input type="hidden" id="delta" value="0.1">
                     <input type="hidden" id="threshold" value="0.1">
 
                     <div id="kmedoids-extra-ui" style="display: none; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px;">
@@ -87,65 +96,53 @@
                         </div>
                     </div>
 
-                    <button id="updatePlot" class="update-btn" style="margin-top: 20px;" disabled>Update Plot</button>
+                    <button id="updatePlot" class="update-btn" style="margin-top: 20px;" disabled>Run Clustering</button>
                 </div>
-            </div> <div class="visualization-panel">
+            </div>
+
+            <div class="visualization-panel">
                 <div class="plot-container">
                     <div id="clusterPlot" class="plot"></div>
                 </div>
                 <div id="elbowPlotContainer" class="plot-container" style="display: none;">
                     <div id="elbowPlot" class="plot"></div>
                 </div>
-            </div> </div> </div> <div class="search-sidebar">
-        <div class="search-header">
-            <h2>Search</h2>
-            <button class="close-sidebar"><i class="fas fa-times"></i></button>
+            </div>
         </div>
-        <div class="search-tabs">
-            <button class="search-tab active" data-tab="ai">AI Search</button>
-        </div>
+    </div>
+
+    <div class="search-sidebar">
+        <div class="search-header"><h2>AI Search</h2><button class="close-sidebar"><i class="fas fa-times"></i></button></div>
+        <div class="search-tabs"><button class="search-tab active" data-tab="ai">AI Assistant</button></div>
         <div class="search-content">
             <div class="ai-search-container">
                 <div class="search-input-container">
-                    <input type="text" class="search-input" placeholder="Ask AI a question...">
+                    <input type="text" class="search-input" placeholder="Ask about well testing...">
                     <button class="search-button" id="searchButton"><i class="fas fa-search"></i></button>
                 </div>
                 <div class="model-dropdown-container" id="modelDropdownContainer">
-                    <div class="model-dropdown-button" id="modelDropdownButton">
-                        <span id="selectedModel">DeepSeek R1-free</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
+                    <div class="model-dropdown-button" id="modelDropdownButton"><span id="selectedModel">DeepSeek R1-free</span><i class="fas fa-chevron-down"></i></div>
                     <div class="model-dropdown-menu" id="modelDropdownMenu">
                         <div class="model-option selected" data-model="deepseek/deepseek-r1:free">DeepSeek R1-free</div>
                         <div class="model-option" data-model="qwen/qwq-32b:free">Qwen 32B-free</div>
                     </div>
-                    <div class="stop-button-container">
-                        <button class="stop-button" id="aiStopButton"><i class="fas fa-stop"></i>Stop Search</button>
-                    </div>
                 </div>
             </div>
             <div class="search-results"></div>
-            <div class="search-footnote ai-footnote active">Powered by openrouter.ai</div>
         </div>
     </div>
-
     <div class="search-toggle"><i class="fas fa-search"></i></div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
-
     <script>
-        // UI Toggle logic for K-Medoids parameters
         function updateUIVisibility() {
             const method = document.getElementById('clusteringMethod').value;
             const extraParams = document.getElementById('kmedoids-extra-ui');
             const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
             const backbone = backboneRadio ? backboneRadio.value : 'kmeans';
-            
-            const shouldShow = (method === 'kmedoids') || (method === 'semi_automated' && backbone === 'kmedoids');
-            extraParams.style.display = shouldShow ? 'block' : 'none';
+            extraParams.style.display = (method === 'kmedoids' || (method === 'semi_automated' && backbone === 'kmedoids')) ? 'block' : 'none';
         }
-
         document.getElementById('clusteringMethod').addEventListener('change', updateUIVisibility);
         document.querySelectorAll('input[name="backboneMethod"]').forEach(r => r.addEventListener('change', updateUIVisibility));
     </script>
