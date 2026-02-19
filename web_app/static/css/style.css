@@ -49,21 +49,21 @@ header p {
 
 /* --- UNIFIED DASHBOARD LAYOUT --- */
 
-/* 1. The Wrapper: This forces the side-by-side view */
+/* --- GRID-BASED DASHBOARD LAYOUT --- */
+
+/* 1. Force the container into two columns: 350px and "Whatever is left" */
 .main-content {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important; /* Forces them to stay on one line */
-    gap: 30px;
-    align-items: flex-start;
-    width: 100%;
+    display: grid !important;
+    grid-template-columns: 350px 1fr !important; 
+    gap: 30px !important;
+    align-items: start !important;
+    width: 100% !important;
     margin-top: 20px;
 }
 
-/* 2. The Sidebar: Keep it fixed so it doesn't shrink */
+/* 2. Sidebar: Stick to the 350px column */
 .controls-panel {
-    flex: 0 0 350px !important; 
-    max-width: 350px;
+    width: 350px !important;
     background: #ffffff;
     padding: 20px;
     border-radius: 8px;
@@ -71,34 +71,31 @@ header p {
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-/* 3. The Plot Area: This must be flexible with min-width: 0 */
+/* 3. Plot Area: Force it to stay within its grid cell */
 .visualization-panel {
-    flex: 1 !important; 
-    min-width: 0 !important; /* CRITICAL: Prevents Plotly from expanding past the screen */
+    min-width: 0 !important; /* CRITICAL: Prevents Plotly from expanding the column */
     display: flex;
     flex-direction: column;
     gap: 20px;
 }
 
-/* 4. The Containers: Ensure they fill the flexible area */
+/* 4. Ensure containers don't overflow */
 .plot-container {
-    width: 100%;
+    width: 100% !important;
+    overflow: hidden !important;
     background-color: white;
     border-radius: 8px;
     box-shadow: 0 2px 5px var(--shadow-color);
     padding: 1rem;
-    min-height: 500px;
 }
 
-/* 5. Responsive: Only stack on small laptops and tablets */
-@media (max-width: 1100px) {
+/* 5. Responsive: Only stack when the screen is actually narrow (tablet/phone) */
+@media (max-width: 950px) {
     .main-content {
-        flex-direction: column !important;
-        flex-wrap: wrap !important;
+        grid-template-columns: 1fr !important; /* Switch to one column */
     }
     .controls-panel {
-        flex: 1 1 100% !important;
-        max-width: 100%;
+        width: 100% !important;
     }
 }
 
