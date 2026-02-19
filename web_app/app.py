@@ -27,32 +27,29 @@ GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
 # 1. Update the process_data return to include raw pressure for Normal/Semi-Log
 def process_data(file_data, sheet_name='Sheet1'):
     try:
-        # Load the data
         if file_data.filename.endswith('.csv'):
             df = pd.read_csv(file_data)
         else:
             df = pd.read_excel(file_data, sheet_name=sheet_name)
         
-        # REQUIRED COLUMNS: check if they exist
-        required = ['lndt', 'dp', 'dp_dlndt']
-        if not all(col in df.columns for col in required):
-            print(f"Missing columns. Found: {df.columns}")
-            return None, None
-
-        # 1. RAW DATA (For Section 2 Preview)
-        raw_t = df['lndt'].tolist()
+        # 1. CONVERT Log-Time to Real-Time for the Preview
+        # Since 'lndt' is ln(t), we do exp(lndt) to get t
+        real_time = np.exp(df['lndt']).tolist()
         raw_dp = df['dp'].tolist()
         raw_der = df['dp_dlndt'].tolist()
 
-        # 2. NORMALIZED DATA (For Section 3 ML)
-        # We normalize for the clustering math
+        # 2. DATA FOR ML (Clustering)
+        # Clustering works BEST on log-log scales. 
+        # Since 'lndt' is ALREADY log, we don't need to log it again!
         lndt_norm = cf.min_max_scaler(df['lndt'].values, limits=[-1,1])
-        # Use Log of derivative for better clustering shapes
-        lndp_der_norm = cf.min_max_scaler(np.log(df['dp_dlndt'].values), limits=[-1,1])
         
-        return (lndt_norm, lndp_der_norm), (raw_t, raw_dp, raw_der)
+        # 'dp_dlndt' is linear, so we MUST log it for the ML to see the shapes correctly
+        # We use a tiny epsilon (1e-6) to avoid log(0) errors
+        lndp_der_norm = cf.min_max_scaler(np.log(df['dp_dlndt'].values + 1e-6), limits=[-1,1])
+        
+        return (lndt_norm, lndp_der_norm), (real_time, raw_dp, raw_der)
     except Exception as e:
-        print(f"Processing Error: {e}")
+        print(f"Error: {e}")
         return None, None
 
 def create_windows(data, window_size):
