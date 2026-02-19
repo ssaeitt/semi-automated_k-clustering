@@ -30,31 +30,26 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
 
+# 1. Update the process_data return to include raw pressure for Normal/Semi-Log
 def process_data(file_data, sheet_name='Sheet1'):
-    """Process the uploaded Excel/CSV file and return the data"""
     try:
         if file_data.filename.endswith('.csv'):
             df = pd.read_csv(file_data)
         else:
             df = pd.read_excel(file_data, sheet_name=sheet_name)
         
-        X = df[['lndt', 'dp_dlndt', 'dp']]
-        lndt, dp_dlndt, dp = X.iloc[:,0], X.iloc[:,1], X.iloc[:,2]
+        # Keep raw values for the Preview Plots
+        raw_t = df['lndt'].values # Assuming this is time or ln(t)
+        raw_dp = df['dp'].values
+        raw_der = df['dp_dlndt'].values
+
+        # Normalize logic for ML (keep existing)
+        lndt_norm = cf.min_max_scaler(raw_t, limits=[-1,1])
+        lndp_der_norm = cf.min_max_scaler(np.log(raw_der), limits=[-1,1])
         
-        lndp_dlndt = np.log(dp_dlndt)
-        lndp = np.log(dp)
-        
-        grad = cf.bourdet_derivative(x=lndt, y=dp, L=0.1, transform_x=False, transform_y=False)
-        grad_2 = cf.bourdet_derivative(x=lndt, y=lndp_dlndt, L=0., transform_x=False, transform_y=False)
-        
-        # Normalize the dataset
-        grad_2 = cf.min_max_scaler(grad_2, limits=[-1,1])
-        lndt = cf.min_max_scaler(lndt, limits=[-1,1])
-        lndp_dlndt = cf.min_max_scaler(lndp_dlndt, limits=[-1,1])
-        
-        return np.array(lndt), np.array(lndp_dlndt), np.array(grad_2)
-    except Exception as e:
-        return None, None, None
+        return raw_t, raw_dp, raw_der, lndt_norm, lndp_der_norm
+    except:
+        return None, None, None, None, None
 
 def create_windows(data, window_size):
     """Create windows from the data with regression for slope and median for center"""
@@ -452,23 +447,21 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    global current_data, current_sheet_name
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
+    global current_data
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
     sheet_name = request.form.get('sheet_name', 'Sheet1')
-    current_sheet_name = sheet_name
     
-    x, y, z = process_data(file, sheet_name)
-    if x is None:
-        return jsonify({'error': 'Error processing file'}), 400
+    t, dp, der, t_n, der_n = process_data(file, sheet_name)
+    if t is None: return jsonify({'error': 'Error'}), 400
     
-    current_data = (x, y, z)
-    return jsonify({'message': 'File uploaded successfully'})
+    current_data = (t_n, der_n, None) # Store normalized for ML
+    
+    return jsonify({
+        'message': 'Uploaded',
+        'raw_t': t.tolist(),
+        'raw_dp': dp.tolist(),
+        'raw_der': der.tolist()
+    })
 
 @app.route('/cluster', methods=['POST'])
 def cluster():
