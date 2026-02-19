@@ -1,19 +1,13 @@
 from flask import Flask, render_template, request, jsonify, Response
 import pandas as pd
 import numpy as np
-import io
-import base64
-import matplotlib.pyplot as plt
+import auxiliary_functions as cf
+import os, traceback, json, requests
 from sklearn_extra.cluster import KMedoids
 from sklearn.cluster import KMeans
 from yellowbrick.cluster import KElbowVisualizer
 from sklearn.preprocessing import StandardScaler
-import auxiliary_functions as cf
-import os
-import traceback
-import requests
 from dotenv import load_dotenv
-import json
 
 # Load environment variables
 load_dotenv()
@@ -32,28 +26,33 @@ GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
 
 # 1. Update the process_data return to include raw pressure for Normal/Semi-Log
 def process_data(file_data, sheet_name='Sheet1'):
-    #Process data for both Preview and ML
     try:
+        # Load the data
         if file_data.filename.endswith('.csv'):
             df = pd.read_csv(file_data)
         else:
             df = pd.read_excel(file_data, sheet_name=sheet_name)
         
-        # 1. RAW DATA for the Preview Plots (Section 2)
-        # We assume columns are named 'lndt', 'dp', and 'dp_dlndt'
+        # REQUIRED COLUMNS: check if they exist
+        required = ['lndt', 'dp', 'dp_dlndt']
+        if not all(col in df.columns for col in required):
+            print(f"Missing columns. Found: {df.columns}")
+            return None, None
+
+        # 1. RAW DATA (For Section 2 Preview)
         raw_t = df['lndt'].tolist()
         raw_dp = df['dp'].tolist()
         raw_der = df['dp_dlndt'].tolist()
 
-        # 2. NORMALIZED DATA for the ML (Section 3)
-        lndt_norm = cf.min_max_scaler(df['lndt'], limits=[-1,1])
-        # Use log of derivative for clustering
-        lndp_dlndt_norm = cf.min_max_scaler(np.log(df['dp_dlndt']), limits=[-1,1])
+        # 2. NORMALIZED DATA (For Section 3 ML)
+        # We normalize for the clustering math
+        lndt_norm = cf.min_max_scaler(df['lndt'].values, limits=[-1,1])
+        # Use Log of derivative for better clustering shapes
+        lndp_der_norm = cf.min_max_scaler(np.log(df['dp_dlndt'].values), limits=[-1,1])
         
-        # Returns: (Normalization for ML), (Raw for Preview)
-        return (lndt_norm, lndp_dlndt_norm), (raw_t, raw_dp, raw_der)
+        return (lndt_norm, lndp_der_norm), (raw_t, raw_dp, raw_der)
     except Exception as e:
-        print(f"Error in process_data: {e}")
+        print(f"Processing Error: {e}")
         return None, None
 
 def create_windows(data, window_size):
@@ -454,25 +453,25 @@ def index():
 def upload_file():
     global current_data
     if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
+        return jsonify({'error': 'No file part'}), 400
     
     file = request.files['file']
     sheet_name = request.form.get('sheet_name', 'Sheet1')
     
-    ml_data, preview_data = process_data(file, sheet_name)
+    ml_package, preview_package = process_data(file, sheet_name)
     
-    if ml_data is None:
-        return jsonify({'error': 'File format error. Check column names.'}), 400
+    if ml_package is None:
+        return jsonify({'error': 'Invalid file format or missing columns (lndt, dp, dp_dlndt)'}), 400
     
-    # Store normalized data for clustering later
-    current_data = (ml_data[0], ml_data[1], None) 
+    # Store for the clustering route
+    current_data = (ml_package[0], ml_package[1], None) 
 
-    # Return raw data to JS for the Preview Plots
+    # Return data to JavaScript to build Section 2
     return jsonify({
-        'message': 'File uploaded successfully',
-        'raw_t': preview_data[0],
-        'raw_dp': preview_data[1],
-        'raw_der': preview_data[2]
+        'message': 'File uploaded successfully!',
+        'raw_t': preview_package[0],
+        'raw_dp': preview_package[1],
+        'raw_der': preview_package[2]
     })
 
 @app.route('/cluster', methods=['POST'])
