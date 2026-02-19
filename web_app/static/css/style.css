@@ -49,52 +49,62 @@ header p {
 
 /* --- UNIFIED DASHBOARD LAYOUT --- */
 
-/* --- GRID-BASED DASHBOARD LAYOUT --- */
+/* --- CONSOLIDATED DASHBOARD LAYOUT (Original Style + Plotly Fix) --- */
 
-/* 1. Force the container into two columns: 350px and "Whatever is left" */
 .main-content {
-    display: grid !important;
-    grid-template-columns: 350px 1fr !important; 
-    gap: 30px !important;
-    align-items: start !important;
-    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important; /* Forces side-by-side NO MATTER WHAT */
+    gap: 2rem;
+    background-color: var(--panel-background);
+    border-radius: 10px;
+    box-shadow: 0 2px 10px var(--shadow-color);
+    padding: 2rem;
+    width: 100%;
     margin-top: 20px;
+    align-items: flex-start;
 }
 
-/* 2. Sidebar: Stick to the 350px column */
 .controls-panel {
-    width: 350px !important;
-    background: #ffffff;
-    padding: 20px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    flex: 0 0 350px !important; /* Fixed width: 350px */
+    border-right: 1px solid var(--border-color);
+    padding-right: 2rem;
+    min-height: 100%;
 }
 
-/* 3. Plot Area: Force it to stay within its grid cell */
 .visualization-panel {
-    min-width: 0 !important; /* CRITICAL: Prevents Plotly from expanding the column */
+    flex: 1 !important; /* Takes up all remaining space */
+    min-width: 0 !important; /* CRITICAL: Prevents Plotly from breaking the layout */
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 2rem;
 }
 
-/* 4. Ensure containers don't overflow */
 .plot-container {
+    background-color: #ffffff;
     width: 100% !important;
-    overflow: hidden !important;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px var(--shadow-color);
-    padding: 1rem;
+    min-height: 450px;
 }
 
-/* 5. Responsive: Only stack when the screen is actually narrow (tablet/phone) */
-@media (max-width: 950px) {
+/* --- RESPONSIVE BEHAVIOR --- */
+/* We only stack them when the screen is too small to fit 350px + a graph */
+@media (max-width: 1100px) {
     .main-content {
-        grid-template-columns: 1fr !important; /* Switch to one column */
+        flex-direction: column !important;
+        flex-wrap: wrap !important;
+        padding: 1.5rem;
     }
+    
     .controls-panel {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding-right: 0;
+        padding-bottom: 2rem;
+    }
+    
+    .visualization-panel {
         width: 100% !important;
     }
 }
