@@ -136,10 +136,21 @@ document.addEventListener('DOMContentLoaded', function() {
         let traces = [];
         let layout = {
             title: '',
-            xaxis: { title: 'Time (hours)', type: 'linear' },
-            yaxis: { title: 'Pressure / Derivative', type: 'linear' },
             paper_bgcolor: '#fdfdfd',
-            plot_bgcolor: '#ffffff'
+            plot_bgcolor: '#ffffff',
+            xaxis: { 
+                title: { text: 'Time (hours)', font: { size: 14 } }, 
+                type: 'linear',
+                showgrid: true,
+                gridcolor: '#e0e0e0'
+            },
+            yaxis: { 
+                title: { text: 'Pressure / Derivative (psi)', font: { size: 14 } }, 
+                type: 'linear',
+                showgrid: true,
+                gridcolor: '#e0e0e0'
+            },
+            margin: { t: 60, b: 60, l: 80, r: 40 }
         };
 
         if (type === 'normal') {
@@ -148,9 +159,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 y: rawDataForPreview.raw_dp,
                 mode: 'lines+markers',
                 name: 'Delta P',
-                line: { color: '#2196F3' }
+                line: { color: '#2196F3', width: 2 },
+                marker: { size: 4 }
             });
-            layout.title = 'Normal Plot (Linear-Linear)';
+            layout.title = 'Normal Plot';
         } 
         else if (type === 'semilog') {
             traces.push({
@@ -158,10 +170,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 y: rawDataForPreview.raw_dp,
                 mode: 'lines+markers',
                 name: 'Delta P',
-                line: { color: '#4CAF50' }
+                line: { color: '#4CAF50', width: 2 },
+                marker: { size: 4 }
             });
-            layout.title = 'Semi-Log Plot (Radial Flow Analysis)';
-            layout.xaxis.type = 'log'; // This makes the real-time look like a log-scale
+            layout.title = 'Semi-Log Plot';
+            layout.xaxis.type = 'log';
+            layout.xaxis.dtick = 1; // ONLY label powers of 10
+            layout.xaxis.tickformat = '.1e'; // Scientific notation: 1.0e+1
         } 
         else if (type === 'loglog') {
             traces.push({
@@ -169,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 y: rawDataForPreview.raw_dp,
                 mode: 'markers',
                 name: 'Delta P',
-                marker: { color: 'blue', size: 6 }
+                marker: { color: 'blue', size: 6, opacity: 0.7 }
             });
             traces.push({
                 x: rawDataForPreview.raw_t,
@@ -178,12 +193,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: 'Derivative',
                 marker: { color: 'red', symbol: 'x', size: 6 }
             });
-            layout.title = 'Log-Log Diagnostic Plot';
+            layout.title = 'Log-Log Plot';
+        
+            // Apply professional log axes to BOTH x and y
             layout.xaxis.type = 'log';
+            layout.xaxis.dtick = 1;
+            layout.xaxis.tickformat = '.1e';
+        
             layout.yaxis.type = 'log';
+            layout.yaxis.dtick = 1;
+            layout.yaxis.tickformat = '.1e';
         }
 
-        Plotly.newPlot('clusterPlot', traces, layout, {responsive: true});
+        const config = { responsive: true, displayModeBar: false };
+        Plotly.newPlot('clusterPlot', traces, layout, config);
     }
 
     // Listen for when the student changes the Preview Dropdown
