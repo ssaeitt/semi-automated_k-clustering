@@ -1,3 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Regime Identification</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
 <body>
     <div class="container">
         <a href="https://github.com/ssaeitt/semi-automated_k-clustering" target="_blank" class="github-link" title="View on GitHub">
@@ -5,7 +18,7 @@
         </a>
         <header>
             <h1>Flow Regime Identification</h1>
-            <p>Upload your pressure transient diagnostic data and explore different clustering methods for flow regime identification</p>
+            <p>Upload your pressure transient diagnostic data and explore different clustering methods</p>
         </header>
 
         <div class="main-content">
@@ -13,7 +26,7 @@
             <div class="controls-panel">
                 <div class="file-upload">
                     <h2>Data Upload</h2>
-                    <p class="small-font"><em>Upload an Excel (.xlsx) or CSV (.csv) file with headers: "lndt", "dp" and "dp_dlndt"</em></p>
+                    <p class="small-font"><em>Upload Excel/CSV: "lndt", "dp", "dp_dlndt"</em></p>
                     <form id="uploadForm">
                         <div class="file-input-wrapper">
                             <input type="file" id="fileInput" accept=".xlsx,.csv" required>
@@ -84,36 +97,57 @@
                     <div id="elbowPlot" class="plot"></div>
                 </div>
             </div> </div> </div> <div class="search-sidebar">
+        <div class="search-header">
+            <h2>Search</h2>
+            <button class="close-sidebar"><i class="fas fa-times"></i></button>
         </div>
-
-    <div class="search-toggle">
-        <i class="fas fa-search"></i>
+        <div class="search-tabs">
+            <button class="search-tab active" data-tab="ai">AI Search</button>
+        </div>
+        <div class="search-content">
+            <div class="ai-search-container">
+                <div class="search-input-container">
+                    <input type="text" class="search-input" placeholder="Ask AI a question...">
+                    <button class="search-button" id="searchButton"><i class="fas fa-search"></i></button>
+                </div>
+                <div class="model-dropdown-container" id="modelDropdownContainer">
+                    <div class="model-dropdown-button" id="modelDropdownButton">
+                        <span id="selectedModel">DeepSeek R1-free</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="model-dropdown-menu" id="modelDropdownMenu">
+                        <div class="model-option selected" data-model="deepseek/deepseek-r1:free">DeepSeek R1-free</div>
+                        <div class="model-option" data-model="qwen/qwq-32b:free">Qwen 32B-free</div>
+                    </div>
+                    <div class="stop-button-container">
+                        <button class="stop-button" id="aiStopButton"><i class="fas fa-stop"></i>Stop Search</button>
+                    </div>
+                </div>
+            </div>
+            <div class="search-results"></div>
+            <div class="search-footnote ai-footnote active">Powered by openrouter.ai</div>
+        </div>
     </div>
+
+    <div class="search-toggle"><i class="fas fa-search"></i></div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
 
     <script>
-        // Critical UI Toggle Logic
-        document.getElementById('clusteringMethod').addEventListener('change', function() {
+        // UI Toggle logic for K-Medoids parameters
+        function updateUIVisibility() {
+            const method = document.getElementById('clusteringMethod').value;
             const extraParams = document.getElementById('kmedoids-extra-ui');
-            const backbone = document.querySelector('input[name="backboneMethod"]:checked').value;
+            const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
+            const backbone = backboneRadio ? backboneRadio.value : 'kmeans';
             
-            const shouldShow = (this.value === 'kmedoids') || 
-                               (this.value === 'semi_automated' && backbone === 'kmedoids');
-            
+            const shouldShow = (method === 'kmedoids') || (method === 'semi_automated' && backbone === 'kmedoids');
             extraParams.style.display = shouldShow ? 'block' : 'none';
-        });
+        }
 
-        // Toggle for Backbone change
-        document.querySelectorAll('input[name="backboneMethod"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const method = document.getElementById('clusteringMethod').value;
-                const extraParams = document.getElementById('kmedoids-extra-ui');
-                const shouldShow = (method === 'kmedoids') || 
-                                   (method === 'semi_automated' && this.value === 'kmedoids');
-                extraParams.style.display = shouldShow ? 'block' : 'none';
-            });
-        });
+        document.getElementById('clusteringMethod').addEventListener('change', updateUIVisibility);
+        document.querySelectorAll('input[name="backboneMethod"]').forEach(r => r.addEventListener('change', updateUIVisibility));
     </script>
 </body>
+</html>
