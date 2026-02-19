@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     // DOM Elements
-    let rawData = null; // To store data for preprocessing plots
+    let rawDataForPreview = null; // To store data for preprocessing plots
     const previewSection = document.getElementById('preview-controls');
     const previewType = document.getElementById('previewType');
     const uploadForm = document.getElementById('uploadForm');
@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Event Listeners
     uploadForm.addEventListener('submit', handleFileUpload);
+    previewType.addEventListener('change', updatePreviewPlot);
     clusteringMethod.addEventListener('change', handleMethodChange);
     backboneRadios.forEach(radio => {
         radio.addEventListener('change', handleBackboneChange);
@@ -106,56 +107,55 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const response = await fetch('/upload', { method: 'POST', body: formData });
             const data = await response.json();
-        
+
             if (response.ok) {
-                // Store the raw data for previewing
-                rawData = data; 
+                rawDataForPreview = data; // Save the raw data
                 updatePlotBtn.disabled = false;
-            
-                // SHOW SECTION 2 and generate the first plot
-                if (previewSection){
+
+                // REVEAL SECTION 2
+                if (previewSection) {
                     previewSection.style.display = 'block';
+                    console.log("Section 2 Revealed");
                 }
                 
-                updatePreviewPlot(); 
-            
-                showNotification('Data loaded! You can now preview data in Section 2.', 'success');
+                // Draw the initial plot
+                updatePreviewPlot();
+                showNotification('Upload Success! Section 2 is now available.', 'success');
             } else {
-                showNotification(data.error || 'Error uploading file', 'error');
+                showNotification(data.error || 'Upload failed', 'error');
             }
         } catch (error) {
-            showNotification('Error: ' + error.message, 'error');
+            showNotification('Server connection error', 'error');
         }
     }
 
     function updatePreviewPlot() {
-        if (!rawData) return;
+        if (!rawDataForPreview) return;
 
         const type = previewType.value;
         let traces = [];
         let layout = {
             title: '',
-            xaxis: { title: 'Time', type: 'linear' },
-            yaxis: { title: 'Pressure', type: 'linear' },
-            margin: { t: 50, b: 50, l: 60, r: 30 }
+            xaxis: { title: 'Time (t)', type: 'linear' },
+            yaxis: { title: 'Pressure (p)', type: 'linear' }
         };
 
         if (type === 'normal') {
             traces.push({
-                x: rawData.raw_t,
-                y: rawData.raw_dp,
+                x: rawDataForPreview.raw_t,
+                y: rawDataForPreview.raw_dp,
                 mode: 'lines+markers',
-                name: 'p vs t',
+                name: 'Pressure',
                 line: { color: '#2196F3' }
             });
             layout.title = 'Normal Plot (Cartesian)';
         } 
         else if (type === 'semilog') {
             traces.push({
-                x: rawData.raw_t,
-                y: rawData.raw_dp,
+                x: rawDataForPreview.raw_t,
+                y: rawDataForPreview.raw_dp,
                 mode: 'lines+markers',
-                name: 'p vs log t',
+                name: 'Pressure',
                 line: { color: '#4CAF50' }
             });
             layout.title = 'Semi-Log Plot';
@@ -163,15 +163,15 @@ document.addEventListener('DOMContentLoaded', function() {
         } 
         else if (type === 'loglog') {
             traces.push({
-                x: rawData.raw_t,
-                y: rawData.raw_dp,
+                x: rawDataForPreview.raw_t,
+                y: rawDataForPreview.raw_dp,
                 mode: 'markers',
                 name: 'Delta P',
                 marker: { color: 'blue' }
             });
             traces.push({
-                x: rawData.raw_t,
-                y: rawData.raw_der,
+                x: rawDataForPreview.raw_t,
+                y: rawDataForPreview.raw_der,
                 mode: 'markers',
                 name: 'Derivative',
                 marker: { color: 'red', symbol: 'x' }
@@ -184,16 +184,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         Plotly.newPlot('clusterPlot', traces, layout, {responsive: true});
-    }
-        
-        const trace = { x: x, y: y, mode: 'lines+markers', type: 'scatter', marker: {color: '#2196F3'} };
-        const layout = {
-            title: type.charAt(0).toUpperCase() + type.slice(1) + ' Plot',
-            xaxis: { title: xTitle, type: xType },
-            yaxis: { title: yTitle, type: yType }
-        };
-
-        Plotly.newPlot('clusterPlot', [trace], layout);
     }
 
     // Listen for when the student changes the Preview Dropdown
