@@ -32,24 +32,29 @@ GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
 
 # 1. Update the process_data return to include raw pressure for Normal/Semi-Log
 def process_data(file_data, sheet_name='Sheet1'):
+    #Process data for both Preview and ML
     try:
         if file_data.filename.endswith('.csv'):
             df = pd.read_csv(file_data)
         else:
             df = pd.read_excel(file_data, sheet_name=sheet_name)
         
-        # Keep raw values for the Preview Plots
-        raw_t = df['lndt'].values # Assuming this is time or ln(t)
-        raw_dp = df['dp'].values
-        raw_der = df['dp_dlndt'].values
+        # 1. RAW DATA for the Preview Plots (Section 2)
+        # We assume columns are named 'lndt', 'dp', and 'dp_dlndt'
+        raw_t = df['lndt'].tolist()
+        raw_dp = df['dp'].tolist()
+        raw_der = df['dp_dlndt'].tolist()
 
-        # Normalize logic for ML (keep existing)
-        lndt_norm = cf.min_max_scaler(raw_t, limits=[-1,1])
-        lndp_der_norm = cf.min_max_scaler(np.log(raw_der), limits=[-1,1])
+        # 2. NORMALIZED DATA for the ML (Section 3)
+        lndt_norm = cf.min_max_scaler(df['lndt'], limits=[-1,1])
+        # Use log of derivative for clustering
+        lndp_dlndt_norm = cf.min_max_scaler(np.log(df['dp_dlndt']), limits=[-1,1])
         
-        return raw_t, raw_dp, raw_der, lndt_norm, lndp_der_norm
-    except:
-        return None, None, None, None, None
+        # Returns: (Normalization for ML), (Raw for Preview)
+        return (lndt_norm, lndp_dlndt_norm), (raw_t, raw_dp, raw_der)
+    except Exception as e:
+        print(f"Error in process_data: {e}")
+        return None, None
 
 def create_windows(data, window_size):
     """Create windows from the data with regression for slope and median for center"""
@@ -448,19 +453,26 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global current_data
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
     file = request.files['file']
     sheet_name = request.form.get('sheet_name', 'Sheet1')
     
-    t, dp, der, t_n, der_n = process_data(file, sheet_name)
-    if t is None: return jsonify({'error': 'Error'}), 400
+    ml_data, preview_data = process_data(file, sheet_name)
     
-    current_data = (t_n, der_n, None) # Store normalized for ML
+    if ml_data is None:
+        return jsonify({'error': 'File format error. Check column names.'}), 400
     
+    # Store normalized data for clustering later
+    current_data = (ml_data[0], ml_data[1], None) 
+
+    # Return raw data to JS for the Preview Plots
     return jsonify({
-        'message': 'Uploaded',
-        'raw_t': t.tolist(),
-        'raw_dp': dp.tolist(),
-        'raw_der': der.tolist()
+        'message': 'File uploaded successfully',
+        'raw_t': preview_data[0],
+        'raw_dp': preview_data[1],
+        'raw_der': preview_data[2]
     })
 
 @app.route('/cluster', methods=['POST'])
