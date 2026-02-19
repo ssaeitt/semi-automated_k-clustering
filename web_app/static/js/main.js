@@ -136,8 +136,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let traces = [];
         let layout = {
             title: '',
-            xaxis: { title: 'Time (t)', type: 'linear' },
-            yaxis: { title: 'Pressure (p)', type: 'linear' }
+            xaxis: { title: 'Time (hours)', type: 'linear' },
+            yaxis: { title: 'Pressure / Derivative', type: 'linear' },
+            paper_bgcolor: '#fdfdfd',
+            plot_bgcolor: '#ffffff'
         };
 
         if (type === 'normal') {
@@ -145,21 +147,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 x: rawDataForPreview.raw_t,
                 y: rawDataForPreview.raw_dp,
                 mode: 'lines+markers',
-                name: 'Pressure',
+                name: 'Delta P',
                 line: { color: '#2196F3' }
             });
-            layout.title = 'Normal Plot (Cartesian)';
+            layout.title = 'Normal Plot (Linear-Linear)';
         } 
         else if (type === 'semilog') {
             traces.push({
                 x: rawDataForPreview.raw_t,
                 y: rawDataForPreview.raw_dp,
                 mode: 'lines+markers',
-                name: 'Pressure',
+                name: 'Delta P',
                 line: { color: '#4CAF50' }
             });
-            layout.title = 'Semi-Log Plot';
-            layout.xaxis.type = 'log';
+            layout.title = 'Semi-Log Plot (Radial Flow Analysis)';
+            layout.xaxis.type = 'log'; // This makes the real-time look like a log-scale
         } 
         else if (type === 'loglog') {
             traces.push({
@@ -167,20 +169,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 y: rawDataForPreview.raw_dp,
                 mode: 'markers',
                 name: 'Delta P',
-                marker: { color: 'blue' }
+                marker: { color: 'blue', size: 6 }
             });
             traces.push({
                 x: rawDataForPreview.raw_t,
                 y: rawDataForPreview.raw_der,
                 mode: 'markers',
                 name: 'Derivative',
-                marker: { color: 'red', symbol: 'x' }
+                marker: { color: 'red', symbol: 'x', size: 6 }
             });
             layout.title = 'Log-Log Diagnostic Plot';
             layout.xaxis.type = 'log';
             layout.yaxis.type = 'log';
-            layout.xaxis.title = 'dt';
-            layout.yaxis.title = 'dp & dp\'';
         }
 
         Plotly.newPlot('clusterPlot', traces, layout, {responsive: true});
