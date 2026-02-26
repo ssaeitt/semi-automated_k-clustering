@@ -291,7 +291,7 @@ def perform_clustering(method, params):
                 try:
                     # Create and fit the visualizer
                     kmedoids = KMedoids(metric='precomputed', method='pam', random_state=42)
-                    visualizer = KElbowVisualizer(kmedoids, k=(2, 15), timings=False)
+                    visualizer = KElbowVisualizer(kmedoids, k=(2, 10), timings=False)
                     visualizer.fit(distance_matrix)
                     
                     # Extract data for JS plotting
@@ -355,7 +355,7 @@ def perform_clustering(method, params):
                     
                     # Create and fit the visualizer for k-means
                     kmeans_model = KMeans(random_state=42)
-                    visualizer = KElbowVisualizer(kmeans_model, k=(2, 15), timings=False)
+                    visualizer = KElbowVisualizer(kmeans_model, k=(2, 10), timings=False)
                     visualizer.fit(X_scaled)
                     
                     # Extract data for JS plotting
