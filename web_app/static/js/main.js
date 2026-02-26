@@ -64,29 +64,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Clean Visibility Logic ---
     function updateParametersVisibility(method, backbone) {
-        const nClustersContainer = document.getElementById('nClusters').parentElement;
-    
+        // Select the container (parent) of the nClusters slider to hide the label too
+        const nClustersContainer = document.getElementById('nClusters').closest('.slider-group') || document.getElementById('nClusters').parentElement;
+
+        // 1. Hide/Show Number of Clusters Slider
         if (method === 'semi_automated') {
-            nClustersContainer.style.opacity = '0.5';
-            nClustersContainer.style.pointerEvents = 'none'; // Disable the slider
-            // Optionally add a label: "k determined by AI"
+            nClustersContainer.style.display = 'none'; // Completely removed from UI
         } else {
-            nClustersContainer.style.opacity = '1';
-            nClustersContainer.style.pointerEvents = 'auto';
+            nClustersContainer.style.display = 'block'; // Reappears for manual modes
         }
-        
+    
+        // 2. Hide/Show K-Medoids Physics Parameters (Gamma/P)
         const kmedoidsUI = document.getElementById('kmedoids-extra-ui');
-        
-        // The "Logic Gate": Show if main method is kmedoids
-        // OR if we are in semi-automated mode AND the backbone is kmedoids
-        const shouldShow = (method === 'kmedoids') ||
-            (method === 'semi_automated' && backbone === 'kmedoids');
+        const shouldShowPhysics = (method === 'kmedoids') || (method === 'semi_automated' && backbone === 'kmedoids');
 
         if (kmedoidsUI) {
-            kmedoidsUI.style.display = shouldShow ? 'block' : 'none';
+            kmedoidsUI.style.display = shouldShowPhysics ? 'block' : 'none';
         }
-        // Handle the backbone selector visibility (only for semi-automated)
-        backboneSelector.style.display = (method === 'semi_automated') ? 'block' : 'none';
+
+        // 3. Hide/Show Backbone Selector (Only for Semi-Automated)
+        const backboneSelector = document.querySelector('.backbone-selector');
+        if (backboneSelector) {
+            backboneSelector.style.display = (method === 'semi_automated') ? 'block' : 'none';
+        }
     }
 
     function handleMethodChange(e) {
