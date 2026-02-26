@@ -64,6 +64,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Clean Visibility Logic ---
     function updateParametersVisibility(method, backbone) {
+        const nClustersContainer = document.getElementById('nClusters').parentElement;
+    
+        if (method === 'semi_automated') {
+            nClustersContainer.style.opacity = '0.5';
+            nClustersContainer.style.pointerEvents = 'none'; // Disable the slider
+            // Optionally add a label: "k determined by AI"
+        } else {
+            nClustersContainer.style.opacity = '1';
+            nClustersContainer.style.pointerEvents = 'auto';
+        }
+        
         const kmedoidsUI = document.getElementById('kmedoids-extra-ui');
         
         // The "Logic Gate": Show if main method is kmedoids
