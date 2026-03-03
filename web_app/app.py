@@ -289,9 +289,9 @@ def perform_clustering(method, params):
                 
                 # Use k-medoids for elbow visualization
                 try:
-                    # Create and fit the visualizer
+                    # Create and fit the 
                     kmedoids = KMedoids(metric='precomputed', method='pam', random_state=42)
-                    visualizer = KElbowVisualizer(kmedoids, k=(2, 11), timings=False)
+                    visualizer = KElbowVisualizer(kmedoids, k=(2, 14), timings=False)
                     visualizer.fit(distance_matrix)
                     
                     # Extract data for JS plotting
@@ -355,7 +355,7 @@ def perform_clustering(method, params):
                     
                     # Create and fit the visualizer for k-means
                     kmeans_model = KMeans(random_state=42)
-                    visualizer = KElbowVisualizer(kmeans_model, k=(2, 11), timings=False)
+                    visualizer = KElbowVisualizer(kmeans_model, k=(2, 14), timings=False)
                     visualizer.fit(X_scaled)
                     
                     # Extract data for JS plotting
