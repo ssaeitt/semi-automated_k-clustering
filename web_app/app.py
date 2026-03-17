@@ -92,7 +92,7 @@ def assign_inverted_v_block(windows, p, early_time_index=2):
                 windows[j]['inverted_block'] = True
     return windows
 
-def custom_distance(w1, w2, D_max, T_max, lambda_e=1.0, lambda_p=1.0, beta=0.5,
+def custom_distance(w1, w2, D_max, T_max, lambda_e=1.0, lambda_p=1.0, beta=1.0,
                    delta=1.0, threshold=1e-3, gamma_block=1.0):
     """Compute custom distance between two windows"""
     index_diff = abs(w1['index'] - w2['index'])
@@ -169,7 +169,7 @@ def perform_clustering(method, params):
             # Extract distance calculation parameters
             lambda_e = params.get('lambda_e', 1.0)
             lambda_p = params.get('lambda_p', 1.0)
-            beta = params.get('beta', 0.5)
+            beta = params.get('beta', 1.0)
             delta = params.get('delta', 0.1)
             threshold = params.get('threshold', 0.1)
             gamma_block = params.get('gamma_block', 1.0)
@@ -217,7 +217,7 @@ def perform_clustering(method, params):
             # Get parameters with default values
             lambda_e = float(params.get('lambda_e', 1.0))
             lambda_p = float(params.get('lambda_p', 1.0))
-            beta = float(params.get('beta', 0.5))
+            beta = float(params.get('beta', 1.0))
             
             # Extract features from windows
             features = []
@@ -256,7 +256,7 @@ def perform_clustering(method, params):
                 # Extract distance calculation parameters
                 lambda_e = params.get('lambda_e', 1.0)
                 lambda_p = params.get('lambda_p', 1.0)
-                beta = params.get('beta', 0.5)
+                beta = params.get('beta', 1.0)
                 delta = params.get('delta', 0.1)
                 threshold = params.get('threshold', 0.1)
                 gamma_block = params.get('gamma_block', 1.0)
@@ -337,7 +337,7 @@ def perform_clustering(method, params):
                     # Extract features for k-means
                     lambda_e = float(params.get('lambda_e', 1.0))
                     lambda_p = float(params.get('lambda_p', 1.0))
-                    beta = float(params.get('beta', 0.5))
+                    beta = float(params.get('beta', 1.0))
                     
                     features = []
                     for w in windows:
