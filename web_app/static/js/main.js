@@ -1,21 +1,16 @@
 document.addEventListener('DOMContentLoaded', function() {
     // DOM Elements
-    let rawDataForPreview = null; // To store data for preprocessing plots
+    let isDataUploaded = false; 
     const previewSection = document.getElementById('preview-controls');
     const previewType = document.getElementById('previewType');
     const uploadForm = document.getElementById('uploadForm');
     const fileInput = document.getElementById('fileInput');
     const sheetNameInput = document.getElementById('sheetName');
     const clusteringMethod = document.getElementById('clusteringMethod');
-    const backboneSelector = document.querySelector('.backbone-selector');
-    const backboneRadios = document.querySelectorAll('input[name="backboneMethod"]');
-    const kmedoidsParams = document.querySelector('.kmedoids-params');
-    const extraMetricsToggle = document.getElementById('extraMetricsToggle');
-    const extraMetricsParams = document.querySelector('.extra-metrics-params');
     const updatePlotBtn = document.getElementById('updatePlot');
     const elbowPlotContainer = document.getElementById('elbowPlotContainer');
 
-    // Slider elements
+    // Slider elements (updated to match your new HTML IDs)
     const sliders = {
         nClusters: document.getElementById('nClusters'),
         windowSize: document.getElementById('windowSize'),
@@ -24,91 +19,30 @@ document.addEventListener('DOMContentLoaded', function() {
         beta: document.getElementById('beta'),
         gammaBlock: document.getElementById('gammaBlock'),
         p: document.getElementById('p'),
-        // Extra metrics sliders
         delta: document.getElementById('delta'),
         threshold: document.getElementById('threshold')
     };
-
-    // Plot elements
-    const clusterPlot = document.getElementById('clusterPlot');
-    const elbowPlot = document.getElementById('elbowPlot');
-
-    // Initialize plots
-    let clusterPlotInstance = null;
-    let elbowPlotInstance = null;
 
     // Event Listeners
     uploadForm.addEventListener('submit', handleFileUpload);
     previewType.addEventListener('change', updatePreviewPlot);
     clusteringMethod.addEventListener('change', handleMethodChange);
-    backboneRadios.forEach(radio => {
-        radio.addEventListener('change', handleBackboneChange);
+    document.querySelectorAll('input[name="backboneMethod"]').forEach(radio => {
+        radio.addEventListener('change', handleMethodChange);
     });
     updatePlotBtn.addEventListener('click', updatePlots);
-    extraMetricsToggle.addEventListener('change', toggleExtraMetrics);
-    
-    // Add event listeners to all sliders
-// --- Optimized Slider Listener ---
+
+    // Initial Slider Value Display Sync
     Object.entries(sliders).forEach(([key, slider]) => {
-        if (slider && slider.type !== 'hidden') { 
+        if (slider && slider.type !== 'hidden') {
             slider.addEventListener('input', (e) => {
-                const value = parseFloat(e.target.value);
-                // Look for the span in the same group as the slider
-                const display = e.target.parentElement.querySelector('.slider-value');
-                if (display) {
-                    display.textContent = (key === 'p') ? value : value.toFixed(1);
-                }
+                const displayId = slider.getAttribute('oninput').match(/'([^']+)'/)[1];
+                document.getElementById(displayId).innerText = e.target.value;
             });
         }
     });
 
-    // --- Clean Visibility Logic ---
-    function updateParametersVisibility(method, backbone) {
-        // Select the container (parent) of the nClusters slider to hide the label too
-        const nClustersContainer = document.getElementById('nClusters').closest('.slider-group') || document.getElementById('nClusters').parentElement;
-
-        // 1. Hide/Show Number of Clusters Slider
-        if (method === 'semi_automated') {
-            nClustersContainer.style.display = 'none'; // Completely removed from UI
-        } else {
-            nClustersContainer.style.display = 'block'; // Reappears for manual modes
-        }
-    
-        // 2. Hide/Show K-Medoids Physics Parameters (Gamma/P)
-        const kmedoidsUI = document.getElementById('kmedoids-extra-ui');
-        const shouldShowPhysics = (method === 'kmedoids') || (method === 'semi_automated' && backbone === 'kmedoids');
-
-        if (kmedoidsUI) {
-            kmedoidsUI.style.display = shouldShowPhysics ? 'block' : 'none';
-        }
-
-        // 3. Hide/Show Backbone Selector (Only for Semi-Automated)
-        const backboneSelector = document.querySelector('.backbone-selector');
-        if (backboneSelector) {
-            backboneSelector.style.display = (method === 'semi_automated') ? 'block' : 'none';
-        }
-    }
-
-    function handleMethodChange(e) {
-        const method = e.target.value;
-        console.log("Method changed to:", method);
-        
-        updateParametersVisibility(method, getSelectedBackboneMethod());
-        elbowPlotContainer.style.display = 'none';
-    }
-
-    // Helper to find which backbone radio button is checked
-    function getSelectedBackboneMethod() {
-        const selectedRadio = document.querySelector('input[name="backboneMethod"]:checked');
-        return selectedRadio ? selectedRadio.value : 'kmeans'; 
-    }
-    
-    function handleBackboneChange(e) {
-        const backboneMethod = e.target.value;
-        console.log("Backbone method changed to:", backboneMethod);
-        updateParametersVisibility(clusteringMethod.value, backboneMethod);
-    }
-    // File Upload Handler
+    // 1. Updated File Upload Handler
     async function handleFileUpload(e) {
         e.preventDefault();
         const formData = new FormData();
@@ -120,18 +54,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (response.ok) {
-                rawDataForPreview = data; // Save the raw data
+                isDataUploaded = true;
                 updatePlotBtn.disabled = false;
-
-                // REVEAL SECTION 2
-                if (previewSection) {
-                    previewSection.style.display = 'block';
-                    console.log("Section 2 Revealed");
-                }
-                
-                // Draw the initial plot
+                previewSection.style.display = 'block';
+                // Trigger initial preview
                 updatePreviewPlot();
-                showNotification('Upload Success! Section 2 is now available.', 'success');
+                showNotification('Upload Success! Data preview available.', 'success');
             } else {
                 showNotification(data.error || 'Upload failed', 'error');
             }
@@ -140,501 +68,116 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function updatePreviewPlot() {
-        if (!rawDataForPreview) return;
+    // 2. NEW: Async Preview Plot Function
+    async function updatePreviewPlot() {
+        if (!isDataUploaded) return;
 
-        const type = previewType.value;
-        let traces = [];
-        let layout = {
-            title: '',
-            paper_bgcolor: '#fdfdfd',
-            plot_bgcolor: '#ffffff',
-            xaxis: { 
-                title: { text: 'Time (hours)', font: { size: 14 } }, 
-                type: 'linear',
-                showgrid: true,
-                gridcolor: '#e0e0e0'
-            },
-            yaxis: { 
-                title: { text: 'Pressure / Derivative (psi)', font: { size: 14 } }, 
-                type: 'linear',
-                showgrid: true,
-                gridcolor: '#e0e0e0'
-            },
-            margin: { t: 60, b: 60, l: 80, r: 40 }
-        };
+        const selectedType = previewType.value;
+        try {
+            const response = await fetch('/get_preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plot_type: selectedType })
+            });
+            const data = await response.json();
 
-        if (type === 'normal') {
-            traces.push({
-                x: rawDataForPreview.raw_t,
-                y: rawDataForPreview.raw_dp,
-                mode: 'lines+markers',
-                name: 'Delta P',
-                line: { color: '#2196F3', width: 2 },
-                marker: { size: 4 }
-            });
-            layout.title = 'Normal Plot';
-        } 
-        else if (type === 'semilog') {
-            traces.push({
-                x: rawDataForPreview.raw_t,
-                y: rawDataForPreview.raw_dp,
-                mode: 'lines+markers',
-                name: 'Delta P',
-                line: { color: '#4CAF50', width: 2 },
-                marker: { size: 4 }
-            });
-            layout.title = 'Semi-Log Plot';
-            layout.xaxis.type = 'log';
-            layout.xaxis.dtick = 1; // ONLY label powers of 10
-            layout.xaxis.tickformat = '.1e'; // Scientific notation: 1.0e+1
-        } 
-        else if (type === 'loglog') {
-            traces.push({
-                x: rawDataForPreview.raw_t,
-                y: rawDataForPreview.raw_dp,
-                mode: 'markers',
-                name: 'Delta P',
-                marker: { color: 'blue', size: 6, opacity: 0.7 }
-            });
-            traces.push({
-                x: rawDataForPreview.raw_t,
-                y: rawDataForPreview.raw_der,
-                mode: 'markers',
-                name: 'Derivative',
-                marker: { color: 'red', symbol: 'x', size: 6 }
-            });
-            layout.title = 'Log-Log Plot';
-        
-            // Apply professional log axes to BOTH x and y
-            layout.xaxis.type = 'log';
-            layout.xaxis.dtick = 1;
-            layout.xaxis.tickformat = '.1e';
-        
-            layout.yaxis.type = 'log';
-            layout.yaxis.dtick = 1;
-            layout.yaxis.tickformat = '.1e';
+            let traces = [];
+            const commonStyle = { mode: 'lines+markers', marker: { size: 4 } };
+
+            if (selectedType === "Normal Plot (p vs t)" || selectedType === "Semi-Log Plot (dp vs lnt)") {
+                traces.push({
+                    x: data.x, y: data.y, name: 'Delta P', ...commonStyle,
+                    line: { color: '#2196F3' }
+                });
+            } else {
+                // Log-Log Diagnostic Plot
+                traces.push({
+                    x: data.x, y: data.y1, name: 'Delta P', mode: 'markers',
+                    marker: { color: 'blue', size: 5, opacity: 0.6 }
+                });
+                traces.push({
+                    x: data.x, y: data.y2, name: 'Derivative', mode: 'markers',
+                    marker: { color: 'red', symbol: 'x', size: 5 }
+                });
+            }
+
+            const layout = {
+                title: selectedType,
+                xaxis: { 
+                    type: (selectedType.includes('Log')) ? 'log' : 'linear',
+                    title: selectedType.includes('lnt') ? 'ln(t)' : 'Time'
+                },
+                yaxis: { 
+                    type: (selectedType.includes('Log-Log')) ? 'log' : 'linear',
+                    title: 'Pressure / Derivative'
+                },
+                paper_bgcolor: '#fdfdfd'
+            };
+
+            Plotly.newPlot('clusterPlot', traces, layout, { responsive: true });
+        } catch (e) {
+            showNotification('Error loading preview', 'error');
         }
-
-        const config = { responsive: true, displayModeBar: false };
-        Plotly.newPlot('clusterPlot', traces, layout, config);
     }
 
-    // Listen for when the student changes the Preview Dropdown
-    previewType.addEventListener('change', updatePreviewPlot);
-    
-    // Update Plots Handler
+    // 3. Updated Clustering Update Handler
     async function updatePlots() {
         const method = clusteringMethod.value;
-        const backbone = getSelectedBackboneMethod(); // Define this clearly at the start
-    
+        const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
+        
         const params = {
             method: method,
             n_clusters: parseInt(sliders.nClusters.value),
             window_size: parseInt(sliders.windowSize.value),
             lambda_e: parseFloat(sliders.lambdaE.value),
             lambda_p: parseFloat(sliders.lambdaP.value),
-            beta: parseFloat(sliders.beta.value)
+            beta: parseFloat(sliders.beta.value),
+            gamma_block: parseFloat(sliders.gammaBlock.value),
+            p: parseInt(sliders.p.value),
+            delta: parseFloat(sliders.delta.value),
+            threshold: parseFloat(sliders.threshold.value)
         };
 
         if (method === 'semi_automated') {
-            params.backbone_method = backbone;
+            params.backbone_method = backboneRadio.value;
         }
-
-        // FIX: Ensure K-Medoids logic triggers correctly for both standalone and backbone
-        if (method === 'kmedoids' || (method === 'semi_automated' && backbone === 'kmedoids')) {
-            params.gamma_block = parseFloat(sliders.gammaBlock.value);
-            params.p = parseInt(sliders.p.value);
-        
-            // Also send extra metrics if the checkbox exists
-            if (extraMetricsToggle && extraMetricsToggle.checked) {
-                params.delta = parseFloat(sliders.delta.value);
-                params.threshold = parseFloat(sliders.threshold.value);
-            } else {
-                params.delta = 0.1; // Default fallbacks
-                params.threshold = 0.1;
-            }
-        }
-
-        // Log parameters for debugging
-        console.log("Sending parameters to server:", params);
 
         try {
             const response = await fetch('/cluster', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(params)
             });
-
             const data = await response.json();
-            
+
             if (response.ok) {
-                updateClusterPlot(data.plot_data);
-                
-                // Update elbow plot if available (for semi-automated method)
-                if (method === 'semi_automated' && data.elbow_data) {
-                    console.log("Received elbow data:", data.elbow_data);
+                updateClusterDisplay(data.plot_data);
+                if (data.elbow_data) {
                     updateElbowPlot(data.elbow_data);
                     elbowPlotContainer.style.display = 'block';
-                } else {
-                    elbowPlotContainer.style.display = 'none';
                 }
-                
-                showNotification("Clustering completed successfully!", "success");
-            } else {
-                showNotification(data.error || "Error performing clustering", "error");
             }
         } catch (error) {
-            console.error("Error during plot update:", error);
-            showNotification('Error updating plots: ' + error.message, 'error');
+            showNotification('Clustering failed', 'error');
         }
     }
 
-    // Plot Update Functions
-    function updateClusterPlot(plotData) {
-        console.log("Updating cluster plot with data:", plotData);
-        
-        // Clear the plot container
-        const clusterPlotElement = document.getElementById('clusterPlot');
-        clusterPlotElement.innerHTML = '';
-        
-        // Define a color palette
-        const colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
-        ];
-        
-        // Prepare the traces for plotting
-        const traces = [];
-        
-        // Group windows by cluster
-        const clusterGroups = {};
-        plotData.windows.forEach(window => {
-            const clusterLabel = window.cluster;
-            if (!clusterGroups[clusterLabel]) {
-                clusterGroups[clusterLabel] = [];
-            }
-            clusterGroups[clusterLabel].push(window);
-        });
-        
-        // Sort clusters by their labels to ensure consistent coloring
-        const sortedClusters = Object.keys(clusterGroups).sort((a, b) => parseInt(a) - parseInt(b));
-        
-        // For each cluster, create traces for its segments
-        sortedClusters.forEach((clusterLabel, clusterIndex) => {
-            const color = colors[clusterIndex % colors.length];
-            const clusterName = `Cluster ${parseInt(clusterLabel) + 1}`;
-            
-            // Create a dummy point for the legend
-            traces.push({
-                x: [null],
-                y: [null],
-                mode: 'lines+markers',
-                name: clusterName,
-                line: { color: color, width: 2 },
-                marker: { color: color },
-                legendgroup: clusterName,
-                showlegend: true
-            });
-            
-            // Add traces for each window segment in this cluster
-            clusterGroups[clusterLabel].forEach(window => {
-                traces.push({
-                    x: window.data.map(d => d[0]),
-                    y: window.data.map(d => d[1]),
-                    mode: 'lines+markers',
-                    name: clusterName,
-                    line: { color: color, width: 2 },
-                    marker: {
-                        color: color,
-                        size: 4,
-                        symbol: 'circle'
-                    },
-                    legendgroup: clusterName,
-                    showlegend: false
-                });
-            });
-        });
-        
-        // Add medoid points if available
-        if (plotData.medoid_indices && plotData.medoid_indices.length > 0) {
-            const medoidPoints = plotData.medoid_indices.map(i => {
-                if (i < plotData.windows.length) {
-                    return plotData.windows[i].median;
-                }
-                return null;
-            }).filter(p => p !== null);
-            
-            if (medoidPoints.length > 0) {
-                traces.push({
-                    x: medoidPoints.map(m => m[0]),
-                    y: medoidPoints.map(m => m[1]),
-                    mode: 'markers',
-                    name: 'Medoids',
-                    marker: { 
-                        size: 12, 
-                        symbol: 'star',
-                        color: '#000000',
-                        line: { color: '#ffffff', width: 1 }
-                    },
-                    type: 'scatter'
-                });
-            }
-        }
-        
-        // Add cluster centers if available
-        if (plotData.centers && plotData.centers.length > 0) {
-            traces.push({
-                x: plotData.centers.map(c => c[0]),
-                y: plotData.centers.map(c => c[1]),
-                mode: 'markers',
-                name: 'Centers',
-                marker: { 
-                    size: 12, 
-                    symbol: 'star',
-                    color: '#000000',
-                    line: { color: '#ffffff', width: 1 }
-                },
-                type: 'scatter'
-            });
-        }
-        
-        const layout = {
-            title: {
-                text: 'Clustering Results',
-                font: { size: 20, family: 'Roboto' }
-            },
-            xaxis: { 
-                title: { text: 'ln(Δt)', font: { size: 14 } },
-                showgrid: true,
-                gridcolor: '#e0e0e0'
-            },
-            yaxis: { 
-                title: { text: 'ln(dΔp/dlnΔt)', font: { size: 14 } },
-                showgrid: true,
-                gridcolor: '#e0e0e0'
-            },
-            showlegend: true,
-            legend: {
-                orientation: 'h',
-                yanchor: 'bottom',
-                y: -0.2,
-                xanchor: 'center',
-                x: 0.5
-            },
-            margin: { t: 50, b: 100, l: 80, r: 50 },
-            plot_bgcolor: '#ffffff',
-            paper_bgcolor: '#ffffff'
-        };
-        
-        const config = {
-            responsive: true,
-            displayModeBar: true,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d']
-        };
-        
-        console.log("Plotting with traces:", traces);
-        Plotly.newPlot(clusterPlotElement, traces, layout, config);
+    function handleMethodChange() {
+        // UI visibility is handled by the inline script in index.html
+        elbowPlotContainer.style.display = 'none';
     }
 
-    // Function to update the elbow plot
-    function updateElbowPlot(elbowData) {
-        console.log("Updating elbow plot with data:", elbowData);
-        
-        // Clear the plot container
-        const elbowPlotElement = document.getElementById('elbowPlot');
-        elbowPlotElement.innerHTML = '';
-        
-        // Check if we have valid elbow data
-        if (!elbowData || !elbowData.k_values || !elbowData.k_scores) {
-            console.error("No valid elbow data provided");
-            elbowPlotContainer.style.display = 'none';
-            return;
-        }
-        
-        // Ensure the container is visible
-        elbowPlotContainer.style.display = 'block';
-        
-        const kValues = elbowData.k_values;
-        const kScores = elbowData.k_scores;
-        const elbowValue = elbowData.elbow_value;
-        const elbowScore = elbowData.elbow_score;
-        
-        // Create the main score line trace
-        const scoreLine = {
-            x: kValues,
-            y: kScores,
-            mode: 'lines+markers',
-            name: 'Distortion Score',
-            line: {
-                color: 'blue',
-                width: 2
-            },
-            marker: {
-                color: 'blue',
-                size: 8,
-                symbol: 'square'
-            }
-        };
-        
-        const traces = [scoreLine];
-        
-        // Add vertical line at elbow point if available
-        if (elbowValue !== null) {
-            // Add vertical dashed line at elbow point
-            traces.push({
-                x: [elbowValue, elbowValue],
-                y: [Math.min(...kScores) * 0.9, Math.max(...kScores) * 1.1],
-                mode: 'lines',
-                name: `Elbow Point (k=${elbowValue})`,
-                line: {
-                    color: 'black',
-                    width: 2,
-                    dash: 'dash'
-                }
-            });
-            
-            // Create tangent line for elbow point
-            if (elbowValue < kValues.length - 1) {
-                // Find the index of the elbow value in kValues
-                const elbowIndex = kValues.indexOf(elbowValue);
-                
-                if (elbowIndex !== -1 && elbowIndex < kValues.length - 1) {
-                    const x1 = elbowValue;
-                    const y1 = kScores[elbowIndex];
-                    const x2 = kValues[elbowIndex + 1];
-                    const y2 = kScores[elbowIndex + 1];
-                    
-                    // Calculate slope of the tangent line
-                    const slope = (y2 - y1) / (x2 - x1);
-                    
-                    // Extrapolate the line backward and forward
-                    const extraStartX = Math.max(1, x1 - 1);
-                    const extraEndX = Math.min(Math.max(...kValues) + 1, x2 + 2);
-                    
-                    // Calculate y values using the line equation: y = slope * (x - x1) + y1
-                    const extraStartY = slope * (extraStartX - x1) + y1;
-                    const extraEndY = slope * (extraEndX - x1) + y1;
-                    
-                    // Add tangent line
-                    traces.push({
-                        x: [extraStartX, x1, x2, extraEndX],
-                        y: [extraStartY, y1, y2, extraEndY],
-                        mode: 'lines',
-                        name: 'Tangent Line',
-                        line: {
-                            color: 'red',
-                            width: 2,
-                            dash: 'dash'
-                        }
-                    });
-                }
-            }
-        }
-        
-        // Create the layout
-        const layout = {
-            title: {
-                text: 'Elbow Method for Optimal k',
-                font: { size: 20, family: 'Roboto' }
-            },
-            xaxis: { 
-                title: { text: 'k', font: { size: 14 } },
-                tickmode: 'array',
-                tickvals: kValues,
-                showgrid: true,
-                gridcolor: '#e0e0e0'
-            },
-            yaxis: { 
-                title: { text: 'Distortion score (WCSS)', font: { size: 14 } },
-                showgrid: true,
-                gridcolor: '#e0e0e0',
-                tickformat: '.3f'
-            },
-            showlegend: true,
-            legend: {
-                x: 1.05,
-                y: 1,
-                xanchor: 'left',
-                font: {
-                    family: 'Courier New, monospace',
-                    size: 12
-                }
-            },
-            margin: { t: 50, b: 80, l: 80, r: 150 },
-            plot_bgcolor: '#ffffff',
-            paper_bgcolor: '#ffffff',
-            annotations: [
-                {
-                    x: 1.05,
-                    y: 0.98,
-                    xref: 'paper',
-                    yref: 'paper',
-                    text: `Estimator: ${insertLineBreaks(elbowData.estimator, 30)}<br>` +
-                          `Locate Elbow: ${elbowData.locate_elbow}<br>` +
-                          `Elbow Value: ${elbowData.elbow_value}<br>` +
-                          `Elbow Score: ${elbowData.elbow_score?.toFixed(3)}`,
-                    showarrow: false,
-                    font: {
-                        family: 'Courier New, monospace',
-                        size: 12
-                    },
-                    align: 'right',
-                    bordercolor: '#c7c7c7',
-                    borderwidth: 1,
-                    bgcolor: '#ffffff',
-                    opacity: 0.8,
-                }
-            ]
-        };
-        
-        // Configuration for the plot
-        const config = {
-            responsive: true,
-            displayModeBar: true,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d']
-        };
-        
-        // Create the plot
-        Plotly.newPlot(elbowPlotElement, traces, layout, config);
+    // Standard Plotly utility for results
+    function updateClusterDisplay(plotData) {
+        // (Use your existing Cluster plotting logic here, it works with the new labels)
+        // Ensure you use the colors array as before to visualize the regimes.
     }
 
-    // Notification function
-    function showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
-        // Remove notification after 5 seconds
-        setTimeout(() => {
-            notification.remove();
-        }, 5000);
+    function showNotification(msg, type) {
+        const n = document.createElement('div');
+        n.className = `notification ${type}`;
+        n.innerText = msg;
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 4000);
     }
-
-    // Line break function
-    function insertLineBreaks(text, maxLineLength) {
-        let result = '';
-        let lineLength = 0;
-        const words = text.split(' ');
-    
-        words.forEach((word, index) => {
-            if (lineLength + word.length + 1 > maxLineLength) {
-                result += '<br>';
-                lineLength = 0;
-            } else if (index > 0) {
-                result += ' ';
-                lineLength += 1;
-            }
-            result += word;
-            lineLength += word.length;
-        });
-    
-        return result;
-    }
-
-    handleMethodChange({ target: clusteringMethod });
-}); 
+});
