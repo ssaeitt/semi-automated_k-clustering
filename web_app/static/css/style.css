@@ -65,19 +65,16 @@ header p {
     align-items: flex-start;
 }
 
-.controls-panel {
-    flex: 0 0 350px !important; /* Fixed width: 350px */
-    border-right: 1px solid var(--border-color);
-    padding-right: 2rem;
-    min-height: 100%;
+.controls-panel select, 
+.controls-panel input[type="text"] {
+    width: 100%;
+    margin-top: 5px;
 }
 
 .visualization-panel {
-    flex: 1 !important; /* Takes up all remaining space */
-    min-width: 0 !important; /* CRITICAL: Prevents Plotly from breaking the layout */
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
+    /* Ensure the plots expand properly in the flex container */
+    flex: 1;
+    min-width: 0; 
 }
 
 .plot-container {
@@ -117,6 +114,54 @@ h2 {
     color: var(--primary-color);
     font-size: 1.5rem;
     margin-bottom: 1rem;
+}
+
+/* Section 2: Data Preview Box */
+.data-preview-section {
+    background-color: #eef7ff; /* Soft blue highlight */
+    border: 1px solid #b6d4fe;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+}
+
+.data-preview-section h2 {
+    color: #004085;
+    font-size: 1.3rem;
+}
+
+/* Section 3 additions: Hyperparameter/Distance Weights Panel */
+.hyperparameter-section {
+    background-color: #fcfcfc;
+    border: 1px solid var(--border-color);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.hyperparameter-section h3 {
+    font-size: 1rem;
+    color: #555;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 5px;
+}
+
+/* Radio Button Group for Backbone Selection */
+.radio-group {
+    display: flex;
+    gap: 15px;
+    margin-top: 5px;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
 }
 
 .file-input-wrapper {
@@ -200,8 +245,12 @@ h2 {
 }
 
 .slider-group label {
+    display: flex;
+    justify-content: space-between; /* Label on left, Value on right */
+    align-items: center;
     font-size: 0.9rem;
-    color: #666;
+    font-weight: 500;
+    color: #555;
 }
 
 .slider-group input[type="range"] {
@@ -228,8 +277,12 @@ h2 {
 }
 
 .slider-value {
-    font-size: 0.9rem;
-    color: #666;
+    color: var(--primary-color);
+    font-weight: bold;
+    font-family: monospace;
+    background: #f0f7ff;
+    padding: 2px 6px;
+    border-radius: 4px;
 }
 
 .visualization-panel {
