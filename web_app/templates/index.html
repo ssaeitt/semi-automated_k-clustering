@@ -44,9 +44,9 @@
                     <div class="method-selector">
                         <label for="previewType">Plot Type:</label>
                         <select id="previewType">
-                            <option value="normal">Normal Plot (p vs t)</option>
-                            <option value="semilog">Semi-Log Plot (p vs log t)</option>
-                            <option value="loglog">Log-Log Plot (Diagnostic)</option>
+                            <option value="Normal Plot (p vs t)">Normal Plot (p vs t)</option>
+                            <option value="Semi-Log Plot (dp vs lnt)">Semi-Log Plot (p vs log t)</option>
+                            <option value="Log-Log Plot (Diagnostic)">Log-Log Plot (Diagnostic)</option>
                         </select>
                     </div>
                 </div>
@@ -62,7 +62,7 @@
                         </select>
                     </div>
 
-                    <div class="backbone-selector" style="display: none; margin-top: 10px;">
+                    <div class="backbone-selector" id="backbone-ui" style="display: none; margin-top: 10px;">
                         <label>Backbone Method:</label>
                         <div class="radio-group">
                             <label><input type="radio" name="backboneMethod" value="kmeans" checked> K-Means</label>
@@ -71,8 +71,8 @@
                     </div>
 
                     <div class="slider-group">
-                        <label for="nClusters">Clusters: <span id="n-clusters-val" class="slider-value">3</span></label>
-                        <input type="range" id="nClusters" min="2" max="10" value="3" step="1" oninput="document.getElementById('n-clusters-val').innerText = this.value">
+                        <label for="nClusters">Clusters: <span id="n-clusters-val" class="slider-value">4</span></label>
+                        <input type="range" id="nClusters" min="2" max="10" value="4" step="1" oninput="document.getElementById('n-clusters-val').innerText = this.value">
                     </div>
 
                     <div class="slider-group">
@@ -80,15 +80,30 @@
                         <input type="range" id="windowSize" min="2" max="21" value="5" step="1" oninput="document.getElementById('window-val').innerText = this.value">
                     </div>
 
-                    <input type="hidden" id="lambdaE" value="1.0"><input type="hidden" id="lambdaP" value="1.0">
-                    <input type="hidden" id="beta" value="0.5"><input type="hidden" id="delta" value="0.1">
+                    <div class="hyperparameter-section" style="border-top: 1px solid #ddd; padding-top: 10px; margin-top: 15px;">
+                        <h3>Distance Weights</h3>
+                        <div class="slider-group">
+                            <label for="lambdaE">Euclidean \( (\lambda_E) \): <span id="le-val" class="slider-value">1.0</span></label>
+                            <input type="range" id="lambdaE" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('le-val').innerText = this.value">
+                        </div>
+                        <div class="slider-group">
+                            <label for="lambdaP">Slope \( (\lambda_P) \): <span id="lp-val" class="slider-value">1.0</span></label>
+                            <input type="range" id="lambdaP" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('lp-val').innerText = this.value">
+                        </div>
+                        <div class="slider-group">
+                            <label for="beta">Temporal \( (\beta) \): <span id="beta-val" class="slider-value">0.5</span></label>
+                            <input type="range" id="beta" min="0" max="5" value="0.5" step="0.1" oninput="document.getElementById('beta-val').innerText = this.value">
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="delta" value="0.1">
                     <input type="hidden" id="threshold" value="0.1">
 
                     <div id="kmedoids-extra-ui" style="display: none; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px;">
                         <h3>Inverted-V Physics</h3>
                         <div class="slider-group">
-                            <label for="gammaBlock">Gamma \( (\gamma) \): <span id="gamma-val" class="slider-value">0.5</span></label>
-                            <input type="range" id="gammaBlock" min="0" max="10" value="0.5" step="0.1" oninput="document.getElementById('gamma-val').innerText = this.value">
+                            <label for="gammaBlock">Gamma \( (\gamma) \): <span id="gamma-val" class="slider-value">1.0</span></label>
+                            <input type="range" id="gammaBlock" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('gamma-val').innerText = this.value">
                         </div>
                         <div class="slider-group">
                             <label for="p">P (Block Size): <span id="p-val" class="slider-value">4</span></label>
@@ -135,16 +150,36 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
+    
     <script>
+        /**
+         * Expanded UI visibility logic to handle Semi-Automated backbone logic
+         */
         function updateUIVisibility() {
             const method = document.getElementById('clusteringMethod').value;
             const extraParams = document.getElementById('kmedoids-extra-ui');
+            const backboneUI = document.getElementById('backbone-ui');
+            
+            // Show backbone radio buttons only for Semi-Automated
+            backboneUI.style.display = (method === 'semi_automated') ? 'block' : 'none';
+
+            // Identify current backbone
             const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
             const backbone = backboneRadio ? backboneRadio.value : 'kmeans';
-            extraParams.style.display = (method === 'kmedoids' || (method === 'semi_automated' && backbone === 'kmedoids')) ? 'block' : 'none';
+
+            // Show Inverted-V sliders for K-Medoids or Semi-Automated with K-Medoids backbone
+            if (method === 'kmedoids' || (method === 'semi_automated' && backbone === 'kmedoids')) {
+                extraParams.style.display = 'block';
+            } else {
+                extraParams.style.display = 'none';
+            }
         }
+
         document.getElementById('clusteringMethod').addEventListener('change', updateUIVisibility);
         document.querySelectorAll('input[name="backboneMethod"]').forEach(r => r.addEventListener('change', updateUIVisibility));
+        
+        // Initial run
+        window.onload = updateUIVisibility;
     </script>
 </body>
 </html>
