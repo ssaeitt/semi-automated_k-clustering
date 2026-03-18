@@ -89,12 +89,20 @@ def index():
 def get_preview():
     plot_type = request.json.get('plot_type')
     if current_data is None: return jsonify({'error': 'No data'}), 400
+    
+    # We always return raw 'time' for plots where the axis will be set to 'log' 
+    # and 'lndt' only for the diagnostic clustering plot if needed.
     if plot_type == "Normal Plot (p vs t)":
         return jsonify({'x': current_data['time'].tolist(), 'y': current_data['dp'].tolist()})
     elif plot_type == "Semi-Log Plot (dp vs lnt)":
-        return jsonify({'x': current_data['lndt'].tolist(), 'y': current_data['dp'].tolist()})
+        # Returning raw time so Plotly can handle the log-scaling of the axis
+        return jsonify({'x': current_data['time'].tolist(), 'y': current_data['dp'].tolist()})
     elif plot_type == "Log-Log Plot (Diagnostic)":
-        return jsonify({'x': current_data['time'].tolist(), 'y1': current_data['dp'].tolist(), 'y2': current_data['dp_dlndt'].tolist()})
+        return jsonify({
+            'x': current_data['time'].tolist(), 
+            'y1': current_data['dp'].tolist(), 
+            'y2': current_data['dp_dlndt'].tolist()
+        })
     return jsonify({'error': 'Invalid plot type'}), 400
 
 @app.route('/cluster', methods=['POST'])
