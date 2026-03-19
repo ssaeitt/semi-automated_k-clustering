@@ -25,18 +25,14 @@
             <div class="controls-panel">
                 <div class="file-upload">
                     <h2>1. Data Upload</h2>
-                    <p class="small-font"><em>Upload an Excel (.xlsx) or CSV (.csv) file with headers: "lndt", "dp" and "dp_dlndt"</em></p>
-                    
+                    <p class="small-font"><em>Upload Excel/CSV with headers: "lndt", "dp", "dp_dlndt"</em></p>
                     <form id="uploadForm" class="tidy-form">
                         <div class="file-input-wrapper">
                             <input type="file" id="fileInput" accept=".xlsx,.csv" required>
-                            <label for="fileInput" class="file-label">
-                                <i class="fas fa-file-upload"></i> Choose File
-                            </label>
+                            <label for="fileInput" class="file-label"><i class="fas fa-file-upload"></i> Choose File</label>
                         </div>
-
                         <div class="input-group-row">
-                            <label for="sheetName">Sheet Name (for Excel):</label>
+                            <label for="sheetName">Sheet Name</label>
                             <input type="text" id="sheetName" value="Sheet1">
                         </div>
                         <button type="submit" class="upload-btn">Upload & Preview</button>
@@ -76,12 +72,12 @@
 
                     <div class="slider-group" id="nClustersContainer">
                         <label for="nClusters">Clusters <span id="n-clusters-val" class="slider-value">4</span></label>
-                        <input type="range" id="nClusters" min="2" max="10" value="4" step="1" oninput="document.getElementById('n-clusters-val').innerText = this.value">
+                        <input type="range" id="nClusters" min="2" max="10" value="4" step="1">
                     </div>
 
                     <div class="slider-group">
                         <label for="windowSize">Window <span id="window-val" class="slider-value">5</span></label>
-                        <input type="range" id="windowSize" min="2" max="21" value="5" step="1" oninput="document.getElementById('window-val').innerText = this.value">
+                        <input type="range" id="windowSize" min="2" max="21" value="5" step="1">
                     </div>
 
                     <div class="hyperparameter-section">
@@ -89,33 +85,32 @@
 
                         <div class="slider-group">
                             <label for="lambdaE">\(\lambda_E\) Euclidean Distance <span id="le-val" class="slider-value">1.0</span></label>
-                            <input type="range" id="lambdaE" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('le-val').innerText = this.value">
+                            <input type="range" id="lambdaE" min="0" max="5" value="1.0" step="0.1">
                         </div>
 
                         <div class="slider-group">
                             <label for="lambdaP">\(\lambda_{\Theta}\) Angular <span id="lp-val" class="slider-value">1.0</span></label>
-                            <input type="range" id="lambdaP" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('lp-val').innerText = this.value">
+                            <input type="range" id="lambdaP" min="0" max="5" value="1.0" step="0.1">
                         </div>
 
                         <div class="slider-group">
                             <label for="beta">\(\lambda_{\tau}\) Temporal (Boundary) <span id="beta-val" class="slider-value">0.5</span></label>
-                            <input type="range" id="beta" min="0" max="5" value="0.5" step="0.1" oninput="document.getElementById('beta-val').innerText = this.value">
+                            <input type="range" id="beta" min="0" max="5" value="0.5" step="0.1">
                         </div>
 
                         <div class="slider-group" id="gammaContainer">
                             <label for="gammaBlock">\(\lambda_{\Lambda}\) Shape (Inverted-V) <span id="gamma-val" class="slider-value">1.0</span></label>
-                            <input type="range" id="gammaBlock" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('gamma-val').innerText = this.value">
+                            <input type="range" id="gammaBlock" min="0" max="5" value="1.0" step="0.1">
                         </div>
 
                         <div class="slider-group" id="pContainer">
-                            <label for="p">\Shape (Block Size) <span id="p-val" class="slider-value">4</span></label>
-                            <input type="range" id="p" min="1" max="10" value="4" step="1" oninput="document.getElementById('p-val').innerText = this.value">
+                            <label for="p">\(V-Size\) Shape (Block Size) <span id="p-val" class="slider-value">4</span></label>
+                            <input type="range" id="p" min="1" max="10" value="4" step="1">
                         </div>
 
                         <div class="slider-group" id="elbowThresholdContainer" style="display: none;">
                             <label for="thresholdElbow">\(TOL\) Elbow Threshold <span id="t-elbow-val" class="slider-value">0.15</span></label>
-                            <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01"
-                                oninput="document.getElementById('t-elbow-val').innerText = this.value">
+                            <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01">
                         </div>
                     </div>
 
@@ -174,7 +169,6 @@
             const isSemi = (method === 'semi_automated');
             backboneUI.style.display = isSemi ? 'block' : 'none';
             elbowThresholdContainer.style.display = isSemi ? 'block' : 'none';
-
             nClustersContainer.style.display = isSemi ? 'none' : 'block';
 
             const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
