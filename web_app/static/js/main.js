@@ -39,14 +39,14 @@ document.addEventListener('DOMContentLoaded', function() {
             slider.addEventListener('input', (e) => {
                 // Find the specific span to update based on the target ID in the HTML
                 const value = e.target.value;
-                if (key === 'nClusters') document.getElementById('n-clusters-val').innerText = value;
-                if (key === 'windowSize') document.getElementById('window-val').innerText = value;
-                if (key === 'lambdaE') document.getElementById('le-val').innerText = value;
-                if (key === 'lambdaP') document.getElementById('lp-val').innerText = value;
-                if (key === 'beta') document.getElementById('beta-val').innerText = value;
-                if (key === 'gammaBlock') document.getElementById('gamma-val').innerText = value;
-                if (key === 'p') document.getElementById('p-val').innerText = value;
-                if (key === 'thresholdElbow') document.getElementById('t-elbow-val').innerText = value;
+                if (key === 'nClusters') { const el = document.getElementById('n-clusters-val'); if(el) el.innerText = value; }
+                if (key === 'windowSize') { const el = document.getElementById('window-val'); if(el) el.innerText = value; }
+                if (key === 'lambdaE') { const el = document.getElementById('le-val'); if(el) el.innerText = value; }
+                if (key === 'lambdaP') { const el = document.getElementById('lp-val'); if(el) el.innerText = value; }
+                if (key === 'beta') { const el = document.getElementById('beta-val'); if(el) el.innerText = value; }
+                if (key === 'gammaBlock') { const el = document.getElementById('gamma-val'); if(el) el.innerText = value; }
+                if (key === 'p') { const el = document.getElementById('p-val'); if(el) el.innerText = value; }
+                if (key === 'thresholdElbow') { const el = document.getElementById('t-elbow-val'); if(el) el.innerText = value; }
             });
         }
     });
