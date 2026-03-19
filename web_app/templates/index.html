@@ -25,13 +25,12 @@
             <div class="controls-panel">
                 <div class="file-upload">
                     <h2>1. Data Upload</h2>
-                    <p class="small-font"><em>Upload Excel/CSV: "lndt", "dp", "dp_dlndt"</em></p>
-                    <form id="uploadForm">
+                    <form id="uploadForm" class="tidy-form">
                         <div class="file-input-wrapper">
                             <input type="file" id="fileInput" accept=".xlsx,.csv" required>
-                            <label for="fileInput" class="file-label">Choose File</label>
+                            <label for="fileInput" class="file-label"><i class="fas fa-file-upload"></i> Choose File</label>
                         </div>
-                        <div class="sheet-name-input">
+                        <div class="input-group-row">
                             <label for="sheetName">Sheet Name</label>
                             <input type="text" id="sheetName" value="Sheet1">
                         </div>
@@ -94,7 +93,7 @@
                         </div>
 
                         <div class="slider-group">
-                            <label for="beta">Temporal Penalty\((\beta)\) <span id="beta-val" class="slider-value">0.5</span></label>
+                            <label for="beta">Temporal penalty\((\beta)\) <span id="beta-val" class="slider-value">0.5</span></label>
                             <input type="range" id="beta" min="0" max="5" value="0.5" step="0.1" oninput="document.getElementById('beta-val').innerText = this.value">
                         </div>
 
