@@ -20,7 +20,8 @@ document.addEventListener('DOMContentLoaded', function() {
         gammaBlock: document.getElementById('gammaBlock'),
         p: document.getElementById('p'),
         delta: document.getElementById('delta'),
-        threshold: document.getElementById('threshold')
+        threshold: document.getElementById('threshold'),
+        thresholdElbow: document.getElementById('thresholdElbow')
     };
 
     // Event Listeners
@@ -45,6 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (key === 'beta') document.getElementById('beta-val').innerText = value;
                 if (key === 'gammaBlock') document.getElementById('gamma-val').innerText = value;
                 if (key === 'p') document.getElementById('p-val').innerText = value;
+                if (key === 'thresholdElbow') document.getElementById('t-elbow-val').innerText = value;
             });
         }
     });
@@ -114,6 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
             p: parseInt(sliders.p.value),
             delta: parseFloat(sliders.delta.value),
             threshold: parseFloat(sliders.threshold.value)
+            threshold_elbow: parseFloat(sliders.thresholdElbow.value)
         };
 
         if (method === 'semi_automated') params.backbone_method = backboneRadio.value;
