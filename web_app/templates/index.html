@@ -66,7 +66,7 @@
                         </select>
                     </div>
 
-                    <div class="backbone-selector" id="backbone-ui" style="display: none; margin-top: 10px;">
+                    <div class="backbone-selector" id="backbone-ui" style="display: none;">
                         <label>Backbone Method</label>
                         <div class="radio-group">
                             <label><input type="radio" name="backboneMethod" value="kmeans" checked> K-Means</label>
@@ -85,30 +85,30 @@
                     </div>
 
                     <div class="hyperparameter-section">
-                        <h3>Distance Weights</h3>
+                        <h3>Dissimilarity Weights</h3>
 
                         <div class="slider-group">
-                            <label for="lambdaE">Distance Dissimilarity\((\lambda_E)\) <span id="le-val" class="slider-value">1.0</span></label>
+                            <label for="lambdaE">\(\lambda_E\): Euclidean Distance <span id="le-val" class="slider-value">1.0</span></label>
                             <input type="range" id="lambdaE" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('le-val').innerText = this.value">
                         </div>
 
                         <div class="slider-group">
-                            <label for="lambdaP">Angular Dissimilarity\((\lambda_P)\) <span id="lp-val" class="slider-value">1.0</span></label>
+                            <label for="lambdaP">\(\lambda_{\Theta}\): Angular <span id="lp-val" class="slider-value">1.0</span></label>
                             <input type="range" id="lambdaP" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('lp-val').innerText = this.value">
                         </div>
 
                         <div class="slider-group">
-                            <label for="beta">Temporal penalty\((\beta)\) <span id="beta-val" class="slider-value">0.5</span></label>
+                            <label for="beta">\(\lambda_{\tau}\): Temporal (Boundary) <span id="beta-val" class="slider-value">0.5</span></label>
                             <input type="range" id="beta" min="0" max="5" value="0.5" step="0.1" oninput="document.getElementById('beta-val').innerText = this.value">
                         </div>
 
                         <div class="slider-group" id="gammaContainer">
-                            <label for="gammaBlock">Inverted-V Detection\((\gamma)\) <span id="gamma-val" class="slider-value">1.0</span></label>
+                            <label for="gammaBlock">\(\lambda_{\Lambda}\): Shape (Inverted-V) <span id="gamma-val" class="slider-value">1.0</span></label>
                             <input type="range" id="gammaBlock" min="0" max="5" value="1.0" step="0.1" oninput="document.getElementById('gamma-val').innerText = this.value">
                         </div>
 
                         <div class="slider-group" id="pContainer">
-                            <label for="p">Block Size \((P)\) <span id="p-val" class="slider-value">4</span></label>
+                            <label for="p"> Shape (Block Size) <span id="p-val" class="slider-value">4</span></label>
                             <input type="range" id="p" min="1" max="10" value="4" step="1" oninput="document.getElementById('p-val').innerText = this.value">
                         </div>
                     </div>
