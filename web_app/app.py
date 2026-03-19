@@ -28,7 +28,6 @@ def process_data(file_data, sheet_name='Sheet1'):
         else:
             df = pd.read_excel(file_data, sheet_name=sheet_name)
         
-        # Ensure we don't have zeros/negatives for logs
         df = df[df['dp_dlndt'] > 0].copy()
         
         lndt = df['lndt'].values
@@ -38,25 +37,18 @@ def process_data(file_data, sheet_name='Sheet1'):
         
         grad_2 = cf.bourdet_derivative(x=lndt, y=lndp_dlndt, L=0., transform_x=False, transform_y=False)
         
-        # Scaling for clustering only
         x_norm = cf.min_max_scaler(lndt, limits=[-1,1])
         y_norm = cf.min_max_scaler(lndp_dlndt, limits=[-1,1])
         
         return {
-            'time': np.exp(lndt), 
-            'lndt': lndt, 
-            'dp': dp, 
-            'dp_dlndt': dp_dlndt,
-            'lndp_dlndt': lndp_dlndt,
-            'x_norm': x_norm, 
-            'y_norm': y_norm
+            'time': np.exp(lndt), 'lndt': lndt, 'dp': dp, 'dp_dlndt': dp_dlndt,
+            'lndp_dlndt': lndp_dlndt, 'x_norm': x_norm, 'y_norm': y_norm
         }
     except Exception as e:
         print(f"Processing Error: {e}")
         return None
 
 def create_windows(data_norm, data_real, window_size):
-    """Creates windows storing both normalized (for ML) and real (for plotting) data."""
     windows = []
     n = data_norm.shape[0]
     for i in range(0, n - window_size + 1, window_size):
@@ -65,7 +57,6 @@ def create_windows(data_norm, data_real, window_size):
         if window_norm.shape[0] < 2: break
         
         median_norm = np.median(window_norm, axis=0)
-        # Calculate slope on real coordinates for angular dissimilarity
         slope, _ = np.polyfit(window_real[:, 0], window_real[:, 1], 1) if np.ptp(window_real[:, 0]) != 0 else (0.0, 0)
         
         windows.append({
@@ -87,18 +78,13 @@ def assign_inverted_v_block(windows, p):
 
 def custom_distance(w1, w2, D_max, T_max, le, lp, b, gb=1.0):
     idx_diff = abs(w1['index'] - w2['index'])
-    # Euclidean in normalized space
     e_dist = np.linalg.norm(w1['data_norm'].flatten() - w2['data_norm'].flatten())
     norm_e = e_dist / D_max if D_max > 0 else e_dist
-    # Angular (Slope)
     a_diff = abs(np.degrees(np.arctan(w1['slope'])) - np.degrees(np.arctan(w2['slope'])))
     if a_diff > 90: a_diff = 180 - a_diff
     norm_p = a_diff / 90.0
-    # Temporal
     norm_t = (max(0, idx_diff - 1) / T_max) if T_max > 0 else max(0, idx_diff - 1)
-    # Inverted-V Detection weight
     bonus = -gb if w1.get('inverted_block') and w2.get('inverted_block') else 0.0
-    
     return max(le * norm_e + lp * norm_p + b * norm_t + bonus, 0)
 
 @app.route('/')
@@ -109,11 +95,9 @@ def index():
 def get_preview():
     plot_type = request.json.get('plot_type')
     if current_data is None: return jsonify({'error': 'No data'}), 400
-    
     if plot_type == "Normal Plot (p vs t)":
         return jsonify({'x': current_data['time'].tolist(), 'y': current_data['dp'].tolist()})
     elif plot_type == "Semi-Log Plot (dp vs lnt)":
-        # Crucial: return raw time so frontend 'log' axis works perfectly
         return jsonify({'x': current_data['time'].tolist(), 'y': current_data['dp'].tolist()})
     elif plot_type == "Log-Log Plot (Diagnostic)":
         return jsonify({
@@ -131,10 +115,8 @@ def cluster():
         le, lp, b, gb = params.get('lambda_e', 1.0), params.get('lambda_p', 1.0), params.get('beta', 0.5), params.get('gamma_block', 1.0)
         w_size = int(params.get('window_size', 5))
         
-        # Prepare windowed data (Norm for calc, Real for plotting)
         norm_stack = np.column_stack((current_data['x_norm'], current_data['y_norm']))
         real_stack = np.column_stack((current_data['lndt'], current_data['lndp_dlndt']))
-        
         windows = create_windows(norm_stack, real_stack, w_size)
         
         if method in ['kmedoids', 'semi_automated']:
@@ -155,23 +137,31 @@ def cluster():
                 dist_mat[i, j] = dist_mat[j, i] = v
                 
         elbow_data = None
+        final_model = None # To capture the model for centroid extraction
+
         if method == 'kmeans':
             feats = [[le*w['median_norm'][0], le*w['median_norm'][1], lp*w['slope'], b*w['index']] for w in windows]
             X_s = StandardScaler().fit_transform(np.array(feats))
-            labels = KMeans(n_clusters=int(params.get('n_clusters', 3)), random_state=42).fit_predict(X_s)
+            final_model = KMeans(n_clusters=int(params.get('n_clusters', 3)), random_state=42).fit(X_s)
+            labels = final_model.labels_
         elif method == 'kmedoids':
-            labels = KMedoids(n_clusters=int(params.get('n_clusters', 3)), metric='precomputed', random_state=42).fit_predict(dist_mat)
+            final_model = KMedoids(n_clusters=int(params.get('n_clusters', 3)), metric='precomputed', random_state=42).fit(dist_mat)
+            labels = final_model.labels_
         elif method == 'semi_automated':
             backbone = params.get('backbone_method', 'kmeans')
             if backbone == 'kmedoids':
                 vis = KElbowVisualizer(KMedoids(metric='precomputed'), k=(2, 12)).fit(dist_mat)
+                k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
+                final_model = KMedoids(n_clusters=k_opt, metric='precomputed', random_state=42).fit(dist_mat)
             else:
                 feats = [[le*w['median_norm'][0], le*w['median_norm'][1], lp*w['slope'], b*w['index']] for w in windows]
                 X_s = StandardScaler().fit_transform(np.array(feats))
                 vis = KElbowVisualizer(KMeans(), k=(2, 12)).fit(X_s)
-            k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
+                k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
+                final_model = KMeans(n_clusters=k_opt, random_state=42).fit(X_s)
+            
+            labels = final_model.labels_
             elbow_data = {'k_values': vis.k_values_, 'k_scores': vis.k_scores_, 'elbow_value': int(k_opt)}
-            labels = KMedoids(n_clusters=k_opt, metric='precomputed', random_state=42).fit_predict(dist_mat) if backbone == 'kmedoids' else KMeans(n_clusters=k_opt, random_state=42).fit_predict(X_s)
 
         # Chronological Re-indexing
         clusters = np.unique(labels)
@@ -181,9 +171,19 @@ def cluster():
         mapping = {old_label: new_label for new_label, old_label in enumerate(sorted_indices)}
         labels = np.array([mapping[l] for l in labels])
         
+        # Capture Medoids/Centroids
+        centers = None
+        medoid_indices = None
+        if hasattr(final_model, 'cluster_centers_'):
+            centers = final_model.cluster_centers_.tolist()
+        elif hasattr(final_model, 'medoid_indices_'):
+            medoid_indices = final_model.medoid_indices_.tolist()
+
         return jsonify({
             'plot_data': {
-                'windows': [{'cluster': int(l), 'data': w['data_real'].tolist()} for l, w in zip(labels, windows)]
+                'windows': [{'cluster': int(l), 'data': w['data_norm'].tolist(), 'median': w['median_norm'].tolist()} for l, w in zip(labels, windows)],
+                'centers': centers,
+                'medoid_indices': medoid_indices
             }, 
             'elbow_data': elbow_data
         })
