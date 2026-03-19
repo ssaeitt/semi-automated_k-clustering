@@ -170,15 +170,42 @@ def cluster():
             final_model = KMedoids(n_clusters=int(params.get('n_clusters', 3)), metric='precomputed', method='pam', random_state=42).fit(dist_mat)
         elif method == 'semi_automated':
             backbone = params.get('backbone_method', 'kmeans')
+            threshold = float(params.get('threshold_elbow', 0.15)) # New parameter
+            # Calculate scores for k = 1 to 10
+        k_range = range(1, 11)
+        scores = []
+    
+        for k in k_range:
             if backbone == 'kmedoids':
-                vis = KElbowVisualizer(KMedoids(metric='precomputed', method='pam'), k=(2, 12)).fit(dist_mat)
-                k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
-                final_model = KMedoids(n_clusters=k_opt, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
+                model = KMedoids(n_clusters=k, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
+                scores.append(model.inertia_)
             else:
-                vis = KElbowVisualizer(KMeans(), k=(2, 12)).fit(X_s)
-                k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
-                final_model = KMeans(n_clusters=k_opt, random_state=42).fit(X_s)
-            elbow_data = {'k_values': [int(v) for v in vis.k_values_], 'k_scores': [float(s) for s in vis.k_scores_], 'elbow_value': int(k_opt)}
+                model = KMeans(n_clusters=k, random_state=42).fit(X_s)
+                scores.append(model.inertia_)
+            
+        # Apply your Slope-Ratio Logic
+        k_opt = 3 # Default fallback
+        for i in range(1, len(scores) - 1):
+            m1 = scores[i] - scores[i-1]   # Slope between k and k-1
+            m2 = scores[i+1] - scores[i]   # Slope between k+1 and k
+        
+            if m1 != 0:
+                ratio = abs(m2) / abs(m1)
+                if ratio < threshold:
+                    k_opt = k_range[i] # This is 'k'
+                    break
+    
+        # Fit the final model with the discovered k_opt
+        if backbone == 'kmedoids':
+            final_model = KMedoids(n_clusters=k_opt, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
+        else:
+            final_model = KMeans(n_clusters=k_opt, random_state=42).fit(X_s)
+
+        elbow_data = {
+            'k_values': list(k_range), 
+            'k_scores': [float(s) for s in scores], 
+            'elbow_value': int(k_opt)
+        }
 
         labels = final_model.labels_
 
