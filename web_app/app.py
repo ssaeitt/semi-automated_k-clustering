@@ -76,27 +76,19 @@ def assign_inverted_v_block(windows, p):
             for j in range(i, i+p): windows[j]['inverted_block'] = True
     return windows
 
-# REFINED: Added Delta and Threshold for "Concave Bonus" to match author's logic
 def custom_distance(w1, w2, D_max, T_max, le, lp, b, gb, delta, threshold):
     idx_diff = abs(w1['index'] - w2['index'])
-    
-    # Euclidean
     e_dist = np.linalg.norm(w1['data_norm'].flatten() - w2['data_norm'].flatten())
     norm_e = e_dist / D_max if D_max > 0 else e_dist
     
-    # Special Case: Flat regimes (Radial Flow)
     if idx_diff == 1 and abs(w1['slope']) < threshold and abs(w2['slope']) < threshold:
         return le * norm_e * 0.1
 
-    # Angular
     a_diff = abs(np.degrees(np.arctan(w1['slope'])) - np.degrees(np.arctan(w2['slope'])))
     if a_diff > 90: a_diff = 180 - a_diff
     norm_p = a_diff / 90.0
-    
-    # Temporal
     norm_t = (max(0, idx_diff - 1) / T_max) if T_max > 0 else max(0, idx_diff - 1)
     
-    # Concave Bonus (Author's physics logic)
     concave_bonus = 0.0
     if idx_diff == 1:
         dx = abs(w1['median_norm'][0] - w2['median_norm'][0])
@@ -107,9 +99,7 @@ def custom_distance(w1, w2, D_max, T_max, le, lp, b, gb, delta, threshold):
             R = float('inf') if abs(y_dd) < 1e-6 else (1 + m_avg**2)**1.5 / abs(y_dd)
             if R > 2 * dx: concave_bonus = -delta
 
-    # Inverted-V Block Bonus
     block_bonus = -gb if w1.get('inverted_block') and w2.get('inverted_block') else 0.0
-    
     return max(le * norm_e + lp * norm_p + b * norm_t + concave_bonus + block_bonus, 0)
 
 @app.route('/')
@@ -135,6 +125,7 @@ def cluster():
         method = params.get('method')
         le, lp, b, gb = float(params.get('lambda_e', 1.0)), float(params.get('lambda_p', 1.0)), float(params.get('beta', 0.5)), float(params.get('gamma_block', 1.0))
         delta, threshold = float(params.get('delta', 0.1)), float(params.get('threshold', 0.1))
+        threshold_elbow = float(params.get('threshold_elbow', 0.15)) 
         w_size = int(params.get('window_size', 5))
         
         norm_stack = np.column_stack((current_data['x_norm'], current_data['y_norm']))
@@ -164,52 +155,44 @@ def cluster():
         final_model = None
         elbow_data = None
 
+        # --- CORRECTED IF/ELIF LOGIC ---
         if method == 'kmeans':
-            final_model = KMeans(n_clusters=int(params.get('n_clusters', 3)), random_state=42).fit(X_s)
+            final_model = KMeans(n_clusters=int(params.get('n_clusters', 3)), random_state=42, n_init=10).fit(X_s)
+        
         elif method == 'kmedoids':
             final_model = KMedoids(n_clusters=int(params.get('n_clusters', 3)), metric='precomputed', method='pam', random_state=42).fit(dist_mat)
+        
         elif method == 'semi_automated':
             backbone = params.get('backbone_method', 'kmeans')
-            threshold = float(params.get('threshold_elbow', 0.15)) # New parameter
-            # Calculate scores for k = 1 to 10
-        k_range = range(1, 11)
-        scores = []
-    
-        for k in k_range:
-            if backbone == 'kmedoids':
-                model = KMedoids(n_clusters=k, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
-                scores.append(model.inertia_)
-            else:
-                model = KMeans(n_clusters=k, random_state=42).fit(X_s)
-                scores.append(model.inertia_)
+            k_range = range(1, 11)
+            scores = []
+            for k in k_range:
+                if backbone == 'kmedoids':
+                    model = KMedoids(n_clusters=k, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
+                    scores.append(model.inertia_)
+                else:
+                    model = KMeans(n_clusters=k, random_state=42, n_init=10).fit(X_s)
+                    scores.append(model.inertia_)
             
-        # Apply your Slope-Ratio Logic
-        k_opt = 3 # Default fallback
-        for i in range(1, len(scores) - 1):
-            m1 = scores[i] - scores[i-1]   # Slope between k and k-1
-            m2 = scores[i+1] - scores[i]   # Slope between k+1 and k
-        
-            if m1 != 0:
-                ratio = abs(m2) / abs(m1)
-                if ratio < threshold:
-                    k_opt = k_range[i] # This is 'k'
-                    break
-    
-        # Fit the final model with the discovered k_opt
-        if backbone == 'kmedoids':
-            final_model = KMedoids(n_clusters=k_opt, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
-        else:
-            final_model = KMeans(n_clusters=k_opt, random_state=42).fit(X_s)
+            k_opt = 3 # Default
+            for i in range(1, len(scores) - 1):
+                m1 = scores[i] - scores[i-1]
+                m2 = scores[i+1] - scores[i]
+                if m1 != 0:
+                    ratio = abs(m2) / abs(m1)
+                    if ratio < threshold_elbow: # Using the dedicated Elbow Threshold
+                        k_opt = k_range[i]
+                        break
+            
+            if backbone == 'kmedoids':
+                final_model = KMedoids(n_clusters=k_opt, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
+            else:
+                final_model = KMeans(n_clusters=k_opt, random_state=42, n_init=10).fit(X_s)
 
-        elbow_data = {
-            'k_values': list(k_range), 
-            'k_scores': [float(s) for s in scores], 
-            'elbow_value': int(k_opt)
-        }
+            elbow_data = {'k_values': list(k_range), 'k_scores': [float(s) for s in scores], 'elbow_value': int(k_opt)}
 
+        # --- POST-PROCESSING ---
         labels = final_model.labels_
-
-        # Chronological Re-indexing
         clusters = np.unique(labels)
         window_x_coords = np.array([w['median_norm'][0] for w in windows])
         cluster_means = [np.mean(window_x_coords[labels == c]) for c in clusters]
@@ -217,15 +200,11 @@ def cluster():
         mapping = {old_label: new_label for new_label, old_label in enumerate(sorted_indices)}
         labels = np.array([mapping[l] for l in labels])
 
-        # REFINED CENTERS: Real Medoids for K-Medoids, Means for K-Means
         vis_centers = []
         if hasattr(final_model, 'medoid_indices_'):
-            medoids_dict = {}
-            for original_idx, window_idx in enumerate(final_model.medoid_indices_):
-                new_l = mapping[original_idx]
-                medoids_dict[new_l] = [windows[window_idx]['median_norm'][0], windows[window_idx]['median_norm'][1]]
-            for c in range(len(clusters)):
-                vis_centers.append(medoids_dict[c])
+            medoids_dict = {mapping[orig_idx]: [windows[win_idx]['median_norm'][0], windows[win_idx]['median_norm'][1]] 
+                            for orig_idx, win_idx in enumerate(final_model.medoid_indices_)}
+            vis_centers = [medoids_dict[c] for c in range(len(clusters))]
         else:
             for c in range(len(clusters)):
                 mask = (labels == c)
