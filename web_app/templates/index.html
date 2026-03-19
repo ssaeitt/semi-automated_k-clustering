@@ -111,6 +111,12 @@
                             <label for="p"> Shape (Block Size) <span id="p-val" class="slider-value">4</span></label>
                             <input type="range" id="p" min="1" max="10" value="4" step="1" oninput="document.getElementById('p-val').innerText = this.value">
                         </div>
+
+                        <div class="slider-group">
+                            <label for="thresholdElbow">Elbow Threshold (\(T\)) <span id="t-elbow-val" class="slider-value">0.15</span></label>
+                            <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01"
+                                oninput="document.getElementById('t-elbow-val').innerText = this.value">
+                        </div>
                     </div>
 
                     <button id="updatePlot" class="update-btn" style="margin-top: 10px;" disabled>Run Clustering</button>
