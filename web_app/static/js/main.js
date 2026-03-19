@@ -228,13 +228,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const backboneUI = document.getElementById('backbone-ui');
         const gammaContainer = document.getElementById('gammaContainer');
         const pContainer = document.getElementById('pContainer');
+        // 1. Add this line to grab the container
+        const elbowThresholdContainer = document.getElementById('elbowThresholdContainer');
 
         nClustersContainer.style.display = (method === 'semi_automated') ? 'none' : 'block';
         backboneUI.style.display = (method === 'semi_automated') ? 'block' : 'none';
+    
+        // 2. Add this line to show/hide the Elbow Threshold container
+        if (elbowThresholdContainer) {
+            elbowThresholdContainer.style.display = (method === 'semi_automated') ? 'block' : 'none';
+        }
 
         const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
         const isKmedoids = (method === 'kmedoids' || (method === 'semi_automated' && backboneRadio.value === 'kmedoids'));
-        
+    
         gammaContainer.style.display = isKmedoids ? 'block' : 'none';
         pContainer.style.display = isKmedoids ? 'block' : 'none';
     }
