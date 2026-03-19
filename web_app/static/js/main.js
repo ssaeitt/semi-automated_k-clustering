@@ -143,44 +143,53 @@ document.addEventListener('DOMContentLoaded', function() {
         const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2'];
         const traces = [];
 
-        // 1. Draw the clustered segments
+        // 1. Plot the regimes
         const clusters = {};
         plotData.windows.forEach(w => {
             if (!clusters[w.cluster]) clusters[w.cluster] = { x: [], y: [] };
-            w.data.forEach(pt => { clusters[w.cluster].x.push(pt[0]); clusters[w.cluster].y.push(pt[1]); });
-            clusters[w.cluster].x.push(null); clusters[w.cluster].y.push(null);
+            w.data.forEach(pt => {
+                clusters[w.cluster].x.push(pt[0]);
+                clusters[w.cluster].y.push(pt[1]);
+            });
+            clusters[w.cluster].x.push(null);
+            clusters[w.cluster].y.push(null);
         });
 
         Object.keys(clusters).forEach((cID, index) => {
             traces.push({
-                x: clusters[cID].x, y: clusters[cID].y,
+                x: clusters[cID].x,
+                y: clusters[cID].y,
                 name: `Regime ${parseInt(cID) + 1}`,
                 mode: 'lines+markers',
                 line: { color: colors[index % colors.length], width: 2 },
                 marker: { size: 4 }
-            });
+            });    
         });
-        
-        // 2. Plot Centroids/Medoids (The Star Markers)
-        if (plotData.centers) {
+
+        // 2. NEW FIX: Plot Centers/Stars using vis_centers
+        // These are now guaranteed to be inside the plot range
+        if (plotData.vis_centers) {
             traces.push({
-                x: plotData.centers.map(c => c[0]), y: plotData.centers.map(c => c[1]),
-                name: 'Centroids', mode: 'markers',
-                marker: { symbol: 'star', size: 14, color: 'black', line: {color: 'white', width: 1} }
-            });
-        } else if (plotData.medoid_indices) {
-            const mx = plotData.medoid_indices.map(i => plotData.windows[i].median[0]);
-            const my = plotData.medoid_indices.map(i => plotData.windows[i].median[1]);
-            traces.push({
-                x: mx, y: my, name: 'Medoids', mode: 'markers',
-                marker: { symbol: 'star', size: 14, color: 'black', line: {color: 'white', width: 1} }
+                x: plotData.vis_centers.map(c => c[0]),
+                y: plotData.vis_centers.map(c => c[1]),
+                name: 'Regime Centers',
+                mode: 'markers',
+                marker: {
+                    symbol: 'star',
+                    size: 15,
+                    color: 'black',
+                    line: { color: 'white', width: 1 }
+                }
             });
         }
+        
         const layout = {
-            title: 'Clustering Results (Normalized Space)',
-            xaxis: { title: 'ln(Δt) [scaled]', range: [-1.1, 1.1], gridcolor: '#eee' },
-            yaxis: { title: 'ln(Derivative) [scaled]', range: [-1.1, 1.1], gridcolor: '#eee' }
+            title: 'Flow Regime Identification (Normalized)',
+            xaxis: { title: 'ln(Δt) [scaled]', range: [-1.1, 1.1] },
+            yaxis: { title: 'ln(Derivative) [scaled]', range: [-1.1, 1.1] },
+            showlegend: true
         };
+
         Plotly.newPlot('clusterPlot', traces, layout);
     }
 
