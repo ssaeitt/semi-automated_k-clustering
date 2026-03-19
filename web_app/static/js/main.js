@@ -142,58 +142,69 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateClusterDisplay(plotData) {
         const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2'];
         const traces = [];
-        
-        // Group segments by cluster to create a clean legend
+
+        // 1. Draw the clustered segments
         const clusters = {};
         plotData.windows.forEach(w => {
             if (!clusters[w.cluster]) clusters[w.cluster] = { x: [], y: [] };
-            // Add window data points to cluster trace
-            w.data.forEach(pt => {
-                clusters[w.cluster].x.push(pt[0]);
-                clusters[w.cluster].y.push(pt[1]);
-            });
-            // Add a null to break line segments between non-contiguous windows
-            clusters[w.cluster].x.push(null);
-            clusters[w.cluster].y.push(null);
+            w.data.forEach(pt => { clusters[w.cluster].x.push(pt[0]); clusters[w.cluster].y.push(pt[1]); });
+            clusters[w.cluster].x.push(null); clusters[w.cluster].y.push(null);
         });
 
         Object.keys(clusters).forEach((cID, index) => {
             traces.push({
-                x: clusters[cID].x,
-                y: clusters[cID].y,
+                x: clusters[cID].x, y: clusters[cID].y,
                 name: `Regime ${parseInt(cID) + 1}`,
                 mode: 'lines+markers',
                 line: { color: colors[index % colors.length], width: 2 },
                 marker: { size: 4 }
             });
         });
-
+        
+        // 2. Plot Centroids/Medoids (The Star Markers)
+        if (plotData.centers) {
+            traces.push({
+                x: plotData.centers.map(c => c[0]), y: plotData.centers.map(c => c[1]),
+                name: 'Centroids', mode: 'markers',
+                marker: { symbol: 'star', size: 14, color: 'black', line: {color: 'white', width: 1} }
+            });
+        } else if (plotData.medoid_indices) {
+            const mx = plotData.medoid_indices.map(i => plotData.windows[i].median[0]);
+            const my = plotData.medoid_indices.map(i => plotData.windows[i].median[1]);
+            traces.push({
+                x: mx, y: my, name: 'Medoids', mode: 'markers',
+                marker: { symbol: 'star', size: 14, color: 'black', line: {color: 'white', width: 1} }
+            });
+        }
         const layout = {
-            title: 'Identified Flow Regimes',
-            xaxis: { title: 'ln(Δt)', gridcolor: '#eee' },
-            yaxis: { title: 'ln(Derivative)', gridcolor: '#eee' }
+            title: 'Clustering Results (Normalized Space)',
+            xaxis: { title: 'ln(Δt) [scaled]', range: [-1.1, 1.1], gridcolor: '#eee' },
+            yaxis: { title: 'ln(Derivative) [scaled]', range: [-1.1, 1.1], gridcolor: '#eee' }
         };
         Plotly.newPlot('clusterPlot', traces, layout);
     }
 
     function updateElbowPlot(elbowData) {
         const trace = {
-            x: elbowData.k_values,
-            y: elbowData.k_scores,
-            mode: 'lines+markers',
-            name: 'Distortion Score',
-            line: { color: 'black', dash: 'dot' },
-            marker: { color: 'red', size: 8 }
+            x: elbowData.k_values, y: elbowData.k_scores,
+            mode: 'lines+markers', name: 'Distortion',
+            line: { color: '#1f77b4', width: 2 },
+            marker: { color: '#1f77b4', size: 10, symbol: 'square' }
         };
 
         const layout = {
-            title: 'Elbow Plot (Optimal k=' + elbowData.elbow_value + ')',
-            xaxis: { title: 'Number of Clusters (k)' },
-            yaxis: { title: 'Distortion' },
+            title: 'Elbow Method for Optimal k',
+            xaxis: { title: 'k', tickmode: 'linear' },
+            yaxis: { title: 'distortion score' },
+            annotations: [{
+                xref: 'paper', yref: 'paper', x: 0.95, y: 0.95,
+                text: `Elbow Value: ${elbowData.elbow_value}`,
+                showarrow: false, bordercolor: 'black', borderwidth: 1, bgcolor: 'white', padding: 10
+            }],
             shapes: [{
                 type: 'line', x0: elbowData.elbow_value, x1: elbowData.elbow_value,
-                y0: 0, y1: Math.max(...elbowData.k_scores),
-                line: { color: 'blue', width: 2, dash: 'dash' }
+                y0: Math.min(...elbowData.k_scores), y1: Math.max(...elbowData.k_scores),
+                line: { color: 'silver', width: 2, dash: 'dash' }
             }]
         };
         Plotly.newPlot('elbowPlot', [trace], layout);
