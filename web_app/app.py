@@ -112,7 +112,10 @@ def cluster():
     try:
         params = request.json
         method = params.get('method')
-        le, lp, b, gb = params.get('lambda_e', 1.0), params.get('lambda_p', 1.0), params.get('beta', 0.5), params.get('gamma_block', 1.0)
+        le = float(params.get('lambda_e', 1.0))
+        lp = float(params.get('lambda_p', 1.0))
+        b = float(params.get('beta', 0.5))
+        gb = float(params.get('gamma_block', 1.0))
         w_size = int(params.get('window_size', 5))
         
         norm_stack = np.column_stack((current_data['x_norm'], current_data['y_norm']))
@@ -122,6 +125,7 @@ def cluster():
         if method in ['kmedoids', 'semi_automated']:
             assign_inverted_v_block(windows, int(params.get('p', 4)))
             
+        # 1. Generate Distance Matrix
         D_max = 0
         for i in range(len(windows)):
             for j in range(i+1, len(windows)):
@@ -136,54 +140,54 @@ def cluster():
                 v = custom_distance(windows[i], windows[j], D_max, T_max, le, lp, b, gb)
                 dist_mat[i, j] = dist_mat[j, i] = v
                 
-        elbow_data = None
-        final_model = None # To capture the model for centroid extraction
+        # 2. Generate Features (Standardized for K-Means)
+        feats = [[le*w['median_norm'][0], le*w['median_norm'][1], lp*w['slope'], b*w['index']] for w in windows]
+        X_s = StandardScaler().fit_transform(np.array(feats))
 
+        final_model = None
+        elbow_data = None
+
+        # 3. Execution Logic
         if method == 'kmeans':
-            feats = [[le*w['median_norm'][0], le*w['median_norm'][1], lp*w['slope'], b*w['index']] for w in windows]
-            X_s = StandardScaler().fit_transform(np.array(feats))
             final_model = KMeans(n_clusters=int(params.get('n_clusters', 3)), random_state=42).fit(X_s)
-            labels = final_model.labels_
         elif method == 'kmedoids':
-            final_model = KMedoids(n_clusters=int(params.get('n_clusters', 3)), metric='precomputed', random_state=42).fit(dist_mat)
-            labels = final_model.labels_
+            final_model = KMedoids(n_clusters=int(params.get('n_clusters', 3)), metric='precomputed', method='pam', random_state=42).fit(dist_mat)
         elif method == 'semi_automated':
             backbone = params.get('backbone_method', 'kmeans')
+            k_limit = 12
             if backbone == 'kmedoids':
-                vis = KElbowVisualizer(KMedoids(metric='precomputed'), k=(2, 12)).fit(dist_mat)
+                vis = KElbowVisualizer(KMedoids(metric='precomputed', method='pam'), k=(2, k_limit)).fit(dist_mat)
                 k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
-                final_model = KMedoids(n_clusters=k_opt, metric='precomputed', random_state=42).fit(dist_mat)
+                final_model = KMedoids(n_clusters=k_opt, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
             else:
-                feats = [[le*w['median_norm'][0], le*w['median_norm'][1], lp*w['slope'], b*w['index']] for w in windows]
-                X_s = StandardScaler().fit_transform(np.array(feats))
-                vis = KElbowVisualizer(KMeans(), k=(2, 12)).fit(X_s)
+                vis = KElbowVisualizer(KMeans(), k=(2, k_limit)).fit(X_s)
                 k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
                 final_model = KMeans(n_clusters=k_opt, random_state=42).fit(X_s)
-            
-            labels = final_model.labels_
-            elbow_data = {'k_values': vis.k_values_, 'k_scores': vis.k_scores_, 'elbow_value': int(k_opt)}
+            elbow_data = {'k_values': [int(v) for v in vis.k_values_], 'k_scores': [float(s) for s in vis.k_scores_], 'elbow_value': int(k_opt)}
 
-        # Chronological Re-indexing
+        labels = final_model.labels_
+
+        # 4. Chronological Re-indexing (Left-to-Right)
         clusters = np.unique(labels)
-        window_x_coords = np.array([w['data_real'][0,0] for w in windows])
+        window_x_coords = np.array([w['median_norm'][0] for w in windows])
         cluster_means = [np.mean(window_x_coords[labels == c]) for c in clusters]
         sorted_indices = np.argsort(cluster_means)
         mapping = {old_label: new_label for new_label, old_label in enumerate(sorted_indices)}
         labels = np.array([mapping[l] for l in labels])
-        
-        # Capture Medoids/Centroids
-        centers = None
-        medoid_indices = None
-        if hasattr(final_model, 'cluster_centers_'):
-            centers = final_model.cluster_centers_.tolist()
-        elif hasattr(final_model, 'medoid_indices_'):
-            medoid_indices = final_model.medoid_indices_.tolist()
+
+        # 5. NEW: FIX FOR CENTROIDS (Calculate centers in 2D plot space)
+        # This ensures stars are always within the [-1, 1] plot area
+        vis_centers = []
+        for c in range(len(clusters)):
+            mask = (labels == c)
+            avg_x = np.mean([windows[i]['median_norm'][0] for i, m in enumerate(mask) if m])
+            avg_y = np.mean([windows[i]['median_norm'][1] for i, m in enumerate(mask) if m])
+            vis_centers.append([avg_x, avg_y])
 
         return jsonify({
             'plot_data': {
-                'windows': [{'cluster': int(l), 'data': w['data_norm'].tolist(), 'median': w['median_norm'].tolist()} for l, w in zip(labels, windows)],
-                'centers': centers,
-                'medoid_indices': medoid_indices
+                'windows': [{'cluster': int(l), 'data': w['data_norm'].tolist()} for l, w in zip(labels, windows)],
+                'vis_centers': vis_centers # Sent as clean 2D coordinates
             }, 
             'elbow_data': elbow_data
         })
