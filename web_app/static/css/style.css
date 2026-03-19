@@ -145,7 +145,7 @@ h2 {
     align-items: center;
     font-size: 0.9rem;
     color: #444;
-    margin-bottom: 4px;
+    margin-bottom: 0;
     gap: 2px; /* Pulls text and symbol tight together */
 }
 
@@ -316,7 +316,28 @@ h2 {
     border-radius: 4px;
 }
 
-/* (Include all remaining search-related styles from your previous file here) */
+.tidy-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.input-group-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.input-group-row input {
+    width: 60%;
+    padding: 5px;
+    border: 1px solid var(--border-color);
+}
+
+/* Tightening Weights */
+.hyperparameter-section .slider-group {
+    margin-bottom: 0.8rem; /* Reduced gap between weight sliders */
+}
 
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
