@@ -25,13 +25,18 @@
             <div class="controls-panel">
                 <div class="file-upload">
                     <h2>1. Data Upload</h2>
+                    <p class="small-font"><em>Upload an Excel (.xlsx) or CSV (.csv) file with headers: "lndt", "dp" and "dp_dlndt"</em></p>
+                    
                     <form id="uploadForm" class="tidy-form">
                         <div class="file-input-wrapper">
                             <input type="file" id="fileInput" accept=".xlsx,.csv" required>
-                            <label for="fileInput" class="file-label"><i class="fas fa-file-upload"></i> Choose File</label>
+                            <label for="fileInput" class="file-label">
+                                <i class="fas fa-file-upload"></i> Choose File
+                            </label>
                         </div>
+
                         <div class="input-group-row">
-                            <label for="sheetName">Sheet Name</label>
+                            <label for="sheetName">Sheet Name (for Excel):</label>
                             <input type="text" id="sheetName" value="Sheet1">
                         </div>
                         <button type="submit" class="upload-btn">Upload & Preview</button>
