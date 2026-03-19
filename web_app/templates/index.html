@@ -85,7 +85,7 @@
                     </div>
 
                     <div class="hyperparameter-section">
-                        <h3>Dissimilarity Weights</h3>
+                        <h3>Dissimilarity weights</h3>
 
                         <div class="slider-group">
                             <label for="lambdaE">\(\lambda_E\) Euclidean Distance <span id="le-val" class="slider-value">1.0</span></label>
@@ -108,12 +108,12 @@
                         </div>
 
                         <div class="slider-group" id="pContainer">
-                            <label for="p"> Shape (Block Size) <span id="p-val" class="slider-value">4</span></label>
+                            <label for="p">\Shape (Block Size) <span id="p-val" class="slider-value">4</span></label>
                             <input type="range" id="p" min="1" max="10" value="4" step="1" oninput="document.getElementById('p-val').innerText = this.value">
                         </div>
 
-                        <div class="slider-group">
-                            <label for="thresholdElbow">Elbow Threshold (\(T\)) <span id="t-elbow-val" class="slider-value">0.15</span></label>
+                        <div class="slider-group" id="elbowThresholdContainer" style="display: none;">
+                            <label for="thresholdElbow">\(TOL\) Elbow Threshold <span id="t-elbow-val" class="slider-value">0.15</span></label>
                             <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01"
                                 oninput="document.getElementById('t-elbow-val').innerText = this.value">
                         </div>
@@ -169,19 +169,18 @@
             const backboneUI = document.getElementById('backbone-ui');
             const gammaContainer = document.getElementById('gammaContainer');
             const pContainer = document.getElementById('pContainer');
-            
-            // 1. Backbone Method radio (only for Semi-Automated)
-            backboneUI.style.display = (method === 'semi_automated') ? 'block' : 'none';
+            const elbowThresholdContainer = document.getElementById('elbowThresholdContainer');
+    
+            const isSemi = (method === 'semi_automated');
+            backboneUI.style.display = isSemi ? 'block' : 'none';
+            elbowThresholdContainer.style.display = isSemi ? 'block' : 'none';
 
-            // 2. Clusters Slider (Hidden for Semi-Automated)
-            nClustersContainer.style.display = (method === 'semi_automated') ? 'none' : 'block';
+            nClustersContainer.style.display = isSemi ? 'none' : 'block';
 
-            // 3. Identify current backbone
             const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
             const backbone = backboneRadio ? backboneRadio.value : 'kmeans';
 
-            // 4. Inverted-V Detection visibility logic
-            const showPhysics = (method === 'kmedoids' || (method === 'semi_automated' && backbone === 'kmedoids'));
+            const showPhysics = (method === 'kmedoids' || (isSemi && backbone === 'kmedoids'));
             gammaContainer.style.display = showPhysics ? 'block' : 'none';
             pContainer.style.display = showPhysics ? 'block' : 'none';
         }
