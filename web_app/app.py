@@ -76,16 +76,41 @@ def assign_inverted_v_block(windows, p):
             for j in range(i, i+p): windows[j]['inverted_block'] = True
     return windows
 
-def custom_distance(w1, w2, D_max, T_max, le, lp, b, gb=1.0):
+# REFINED: Added Delta and Threshold for "Concave Bonus" to match author's logic
+def custom_distance(w1, w2, D_max, T_max, le, lp, b, gb, delta, threshold):
     idx_diff = abs(w1['index'] - w2['index'])
+    
+    # Euclidean
     e_dist = np.linalg.norm(w1['data_norm'].flatten() - w2['data_norm'].flatten())
     norm_e = e_dist / D_max if D_max > 0 else e_dist
+    
+    # Special Case: Flat regimes (Radial Flow)
+    if idx_diff == 1 and abs(w1['slope']) < threshold and abs(w2['slope']) < threshold:
+        return le * norm_e * 0.1
+
+    # Angular
     a_diff = abs(np.degrees(np.arctan(w1['slope'])) - np.degrees(np.arctan(w2['slope'])))
     if a_diff > 90: a_diff = 180 - a_diff
     norm_p = a_diff / 90.0
+    
+    # Temporal
     norm_t = (max(0, idx_diff - 1) / T_max) if T_max > 0 else max(0, idx_diff - 1)
-    bonus = -gb if w1.get('inverted_block') and w2.get('inverted_block') else 0.0
-    return max(le * norm_e + lp * norm_p + b * norm_t + bonus, 0)
+    
+    # Concave Bonus (Author's physics logic)
+    concave_bonus = 0.0
+    if idx_diff == 1:
+        dx = abs(w1['median_norm'][0] - w2['median_norm'][0])
+        if dx > 0:
+            m1, m2 = w1['slope'], w2['slope']
+            m_avg = (m1 + m2) / 2.0
+            y_dd = (m2 - m1) / dx
+            R = float('inf') if abs(y_dd) < 1e-6 else (1 + m_avg**2)**1.5 / abs(y_dd)
+            if R > 2 * dx: concave_bonus = -delta
+
+    # Inverted-V Block Bonus
+    block_bonus = -gb if w1.get('inverted_block') and w2.get('inverted_block') else 0.0
+    
+    return max(le * norm_e + lp * norm_p + b * norm_t + concave_bonus + block_bonus, 0)
 
 @app.route('/')
 def index():
@@ -100,11 +125,7 @@ def get_preview():
     elif plot_type == "Semi-Log Plot (dp vs lnt)":
         return jsonify({'x': current_data['time'].tolist(), 'y': current_data['dp'].tolist()})
     elif plot_type == "Log-Log Plot (Diagnostic)":
-        return jsonify({
-            'x': current_data['time'].tolist(), 
-            'y1': current_data['dp'].tolist(), 
-            'y2': current_data['dp_dlndt'].tolist()
-        })
+        return jsonify({'x': current_data['time'].tolist(), 'y1': current_data['dp'].tolist(), 'y2': current_data['dp_dlndt'].tolist()})
     return jsonify({'error': 'Invalid plot type'}), 400
 
 @app.route('/cluster', methods=['POST'])
@@ -112,10 +133,8 @@ def cluster():
     try:
         params = request.json
         method = params.get('method')
-        le = float(params.get('lambda_e', 1.0))
-        lp = float(params.get('lambda_p', 1.0))
-        b = float(params.get('beta', 0.5))
-        gb = float(params.get('gamma_block', 1.0))
+        le, lp, b, gb = float(params.get('lambda_e', 1.0)), float(params.get('lambda_p', 1.0)), float(params.get('beta', 0.5)), float(params.get('gamma_block', 1.0))
+        delta, threshold = float(params.get('delta', 0.1)), float(params.get('threshold', 0.1))
         w_size = int(params.get('window_size', 5))
         
         norm_stack = np.column_stack((current_data['x_norm'], current_data['y_norm']))
@@ -125,7 +144,6 @@ def cluster():
         if method in ['kmedoids', 'semi_automated']:
             assign_inverted_v_block(windows, int(params.get('p', 4)))
             
-        # 1. Generate Distance Matrix
         D_max = 0
         for i in range(len(windows)):
             for j in range(i+1, len(windows)):
@@ -137,37 +155,34 @@ def cluster():
         dist_mat = np.zeros((n_w, n_w))
         for i in range(n_w):
             for j in range(i, n_w):
-                v = custom_distance(windows[i], windows[j], D_max, T_max, le, lp, b, gb)
+                v = custom_distance(windows[i], windows[j], D_max, T_max, le, lp, b, gb, delta, threshold)
                 dist_mat[i, j] = dist_mat[j, i] = v
                 
-        # 2. Generate Features (Standardized for K-Means)
         feats = [[le*w['median_norm'][0], le*w['median_norm'][1], lp*w['slope'], b*w['index']] for w in windows]
         X_s = StandardScaler().fit_transform(np.array(feats))
 
         final_model = None
         elbow_data = None
 
-        # 3. Execution Logic
         if method == 'kmeans':
             final_model = KMeans(n_clusters=int(params.get('n_clusters', 3)), random_state=42).fit(X_s)
         elif method == 'kmedoids':
             final_model = KMedoids(n_clusters=int(params.get('n_clusters', 3)), metric='precomputed', method='pam', random_state=42).fit(dist_mat)
         elif method == 'semi_automated':
             backbone = params.get('backbone_method', 'kmeans')
-            k_limit = 12
             if backbone == 'kmedoids':
-                vis = KElbowVisualizer(KMedoids(metric='precomputed', method='pam'), k=(2, k_limit)).fit(dist_mat)
+                vis = KElbowVisualizer(KMedoids(metric='precomputed', method='pam'), k=(2, 12)).fit(dist_mat)
                 k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
                 final_model = KMedoids(n_clusters=k_opt, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
             else:
-                vis = KElbowVisualizer(KMeans(), k=(2, k_limit)).fit(X_s)
+                vis = KElbowVisualizer(KMeans(), k=(2, 12)).fit(X_s)
                 k_opt = vis.elbow_value_ if vis.elbow_value_ else 4
                 final_model = KMeans(n_clusters=k_opt, random_state=42).fit(X_s)
             elbow_data = {'k_values': [int(v) for v in vis.k_values_], 'k_scores': [float(s) for s in vis.k_scores_], 'elbow_value': int(k_opt)}
 
         labels = final_model.labels_
 
-        # 4. Chronological Re-indexing (Left-to-Right)
+        # Chronological Re-indexing
         clusters = np.unique(labels)
         window_x_coords = np.array([w['median_norm'][0] for w in windows])
         cluster_means = [np.mean(window_x_coords[labels == c]) for c in clusters]
@@ -175,19 +190,26 @@ def cluster():
         mapping = {old_label: new_label for new_label, old_label in enumerate(sorted_indices)}
         labels = np.array([mapping[l] for l in labels])
 
-        # 5. NEW: FIX FOR CENTROIDS (Calculate centers in 2D plot space)
-        # This ensures stars are always within the [-1, 1] plot area
+        # REFINED CENTERS: Real Medoids for K-Medoids, Means for K-Means
         vis_centers = []
-        for c in range(len(clusters)):
-            mask = (labels == c)
-            avg_x = np.mean([windows[i]['median_norm'][0] for i, m in enumerate(mask) if m])
-            avg_y = np.mean([windows[i]['median_norm'][1] for i, m in enumerate(mask) if m])
-            vis_centers.append([avg_x, avg_y])
+        if hasattr(final_model, 'medoid_indices_'):
+            medoids_dict = {}
+            for original_idx, window_idx in enumerate(final_model.medoid_indices_):
+                new_l = mapping[original_idx]
+                medoids_dict[new_l] = [windows[window_idx]['median_norm'][0], windows[window_idx]['median_norm'][1]]
+            for c in range(len(clusters)):
+                vis_centers.append(medoids_dict[c])
+        else:
+            for c in range(len(clusters)):
+                mask = (labels == c)
+                avg_x = np.mean([windows[i]['median_norm'][0] for i, m in enumerate(mask) if m])
+                avg_y = np.mean([windows[i]['median_norm'][1] for i, m in enumerate(mask) if m])
+                vis_centers.append([avg_x, avg_y])
 
         return jsonify({
             'plot_data': {
                 'windows': [{'cluster': int(l), 'data': w['data_norm'].tolist()} for l, w in zip(labels, windows)],
-                'vis_centers': vis_centers # Sent as clean 2D coordinates
+                'vis_centers': vis_centers
             }, 
             'elbow_data': elbow_data
         })
