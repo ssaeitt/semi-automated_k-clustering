@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok) {
                 isDataUploaded = true;
                 updatePlotBtn.disabled = false;
-                previewSection.style.display = 'block';
+
                 updatePreviewPlot();
                 showNotification('Upload Success!', 'success');
             }
