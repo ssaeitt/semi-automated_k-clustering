@@ -48,7 +48,7 @@
                             <option value="Semi-Log Plot (dp vs lnt)">Semi-Log Plot (p vs log t)</option>
                             <option value="Log-Log Plot (Diagnostic)">Log-Log Plot (Diagnostic)</option>
                         </select>
-                    </div>
+                    </div>   
                 </div>
 
                 <div class="clustering-params">
@@ -89,7 +89,7 @@
                         </div>
 
                         <div class="slider-group">
-                            <label for="lambdaP">\(\lambda_{\Theta}\) Angular <span id="lp-val" class="slider-value">1.0</span></label>
+                            <label for="lambdaP">\(\lambda_{\Theta}\) Angular (Slope) <span id="lp-val" class="slider-value">1.0</span></label>
                             <input type="range" id="lambdaP" min="0" max="5" value="1.0" step="0.1">
                         </div>
 
@@ -99,17 +99,21 @@
                         </div>
 
                         <div class="slider-group" id="gammaContainer">
-                            <label for="gammaBlock">\(\lambda_{\Lambda}\) Shape (Inverted-V) <span id="gamma-val" class="slider-value">1.0</span></label>
+                            <label for="gammaBlock">\(\lambda_{\Lambda}\) Inverted-V (Shape) <span id="gamma-val" class="slider-value">1.0</span></label>
                             <input type="range" id="gammaBlock" min="0" max="5" value="1.0" step="0.1">
                         </div>
+                    </div>
 
+                    <div class="hyperparameter-section" id="additionalParamBox">
+                        <h3>Additional Parameters</h3>
+                        
                         <div class="slider-group" id="pContainer">
-                            <label for="p">\(V-Size\) Shape (Block Size) <span id="p-val" class="slider-value">4</span></label>
+                            <label for="p">\(V-Size\) Inverted-V (Block Size) <span id="p-val" class="slider-value">4</span></label>
                             <input type="range" id="p" min="1" max="10" value="4" step="1">
                         </div>
 
                         <div class="slider-group" id="elbowThresholdContainer" style="display: none;">
-                            <label for="thresholdElbow">\(m_Ratio\) Elbow Slope Ratio <span id="t-elbow-val" class="slider-value">0.15</span></label>
+                            <label for="thresholdElbow">\(m_{ratio}\) Elbow Slopes Ratio <span id="t-elbow-val" class="slider-value">0.15</span></label>
                             <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01">
                         </div>
                     </div>
