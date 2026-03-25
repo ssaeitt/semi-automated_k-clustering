@@ -181,14 +181,33 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleMethodChange() {
         const method = clusteringMethod.value;
         const isSemi = (method === 'semi_automated');
+
+        // 1. Core Visibility
         document.getElementById('nClustersContainer').style.display = isSemi ? 'none' : 'block';
         document.getElementById('backbone-ui').style.display = isSemi ? 'block' : 'none';
-        document.getElementById('elbowThresholdContainer').style.display = isSemi ? 'block' : 'none';
-        
+
+        // 2. Elbow Threshold Visibility (FIXED TYPO: elbowCont)
+        const elbowCont = document.getElementById('elbowThresholdContainer');
+        if (elbowCont) {
+            elbowCont.style.display = isSemi ? 'block' : 'none';
+        }
+
+        // 3. Backbone Check for K-Medoids logic
         const backbone = document.querySelector('input[name="backboneMethod"]:checked')?.value || 'kmeans';
         const showPhysics = (method === 'kmedoids' || (isSemi && backbone === 'kmedoids'));
+        
         document.getElementById('gammaContainer').style.display = showPhysics ? 'block' : 'none';
         document.getElementById('pContainer').style.display = showPhysics ? 'block' : 'none';
+
+        // 4. Box Visibility (FIXED QUOTE: 'additionalParamsBox')
+        const additionalBox = document.getElementById('additionalParamsBox');
+        if (additionalBox) {
+            if (!isSemi && !showPhysics) {
+                additionalBox.style.display = 'none';
+            } else {
+                additionalBox.style.display = 'block';
+            }
+        }
     }
 
     function showNotification(msg, type) {
