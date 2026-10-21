@@ -68,13 +68,27 @@ def create_windows(data_norm, data_real, window_size):
         })
     return windows
 
-def assign_inverted_v_block(windows, p):
+def assign_inverted_v_block(windows, p, early_time_index=None):
+    """Mark every block of p windows that contains an inverted V (slope + then -).
+    early_time_index (same logic as clustering_with_custom_dissimilarity_metric.py): if the inverted V is
+    found in a block starting at window i <= early_time_index, the WBS block is extended back to window 0,
+    so the unit-slope rise before the hump joins the hump. None = off (original web-app behaviour)."""
     for w in windows: w['inverted_block'] = False
     for i in range(len(windows) - p + 1):
         block = windows[i:i+p]
         if any(block[j]['slope'] > 0 and block[j+1]['slope'] < 0 for j in range(p - 1)):
-            for j in range(i, i+p): windows[j]['inverted_block'] = True
+            start = 0 if (early_time_index is not None and i <= early_time_index) else i
+            for j in range(start, i+p): windows[j]['inverted_block'] = True
     return windows
+
+
+def marginal_gain_k(scores, tau):
+    """Largest k whose added cluster still removes at least tau of the total cost J(1).
+    scores[k-1] = J(k) for k = 1..K. Returns (k_opt, gains) with gains[k] for k = 2..K."""
+    J1 = scores[0]
+    gains = {k: ((scores[k-2] - scores[k-1]) / J1 if J1 > 0 else 0.0) for k in range(2, len(scores) + 1)}
+    ks = [k for k, g in gains.items() if g >= tau]
+    return (max(ks) if ks else 1), gains
 
 def custom_distance(w1, w2, D_max, T_max, le, lp, b, gb, delta, threshold):
     idx_diff = abs(w1['index'] - w2['index'])
@@ -125,7 +139,11 @@ def cluster():
         method = params.get('method')
         le, lp, b, gb = float(params.get('lambda_e', 1.0)), float(params.get('lambda_p', 1.0)), float(params.get('beta', 0.5)), float(params.get('gamma_block', 1.0))
         delta, threshold = float(params.get('delta', 0.1)), float(params.get('threshold', 0.1))
-        threshold_elbow = float(params.get('threshold_elbow', 0.15)) 
+        threshold_elbow = float(params.get('threshold_elbow', 0.15))
+        k_rule = params.get('k_rule', 'elbow')            # 'elbow' (original) or 'marginal_gain'
+        tau = float(params.get('tau', 0.04))
+        early = params.get('early_time_index', None)      # None, '' or a negative value = off
+        early = None if early in (None, '') or int(early) < 0 else int(early)
         w_size = int(params.get('window_size', 5))
         
         norm_stack = np.column_stack((current_data['x_norm'], current_data['y_norm']))
@@ -133,7 +151,7 @@ def cluster():
         windows = create_windows(norm_stack, real_stack, w_size)
         
         if method in ['kmedoids', 'semi_automated']:
-            assign_inverted_v_block(windows, int(params.get('p', 4)))
+            assign_inverted_v_block(windows, int(params.get('p', 4)), early)
             
         D_max = 0
         for i in range(len(windows)):
@@ -174,22 +192,28 @@ def cluster():
                     model = KMeans(n_clusters=k, random_state=42, n_init=10).fit(X_s)
                     scores.append(model.inertia_)
             
-            k_opt = 3 # Default
-            for i in range(1, len(scores) - 1):
-                m1 = scores[i] - scores[i-1]
-                m2 = scores[i+1] - scores[i]
-                if m1 != 0:
-                    ratio = abs(m2) / abs(m1)
-                    if ratio < threshold_elbow: # Using the dedicated Elbow Threshold
-                        k_opt = k_range[i]
-                        break
+            gains = None
+            if k_rule == 'marginal_gain':
+                k_opt, gains = marginal_gain_k(scores, tau)
+            else:
+                k_opt = 3 # Default
+                for i in range(1, len(scores) - 1):
+                    m1 = scores[i] - scores[i-1]
+                    m2 = scores[i+1] - scores[i]
+                    if m1 != 0:
+                        ratio = abs(m2) / abs(m1)
+                        if ratio < threshold_elbow: # Using the dedicated Elbow Threshold
+                            k_opt = k_range[i]
+                            break
             
             if backbone == 'kmedoids':
                 final_model = KMedoids(n_clusters=k_opt, metric='precomputed', method='pam', random_state=42).fit(dist_mat)
             else:
                 final_model = KMeans(n_clusters=k_opt, random_state=42, n_init=10).fit(X_s)
 
-            elbow_data = {'k_values': list(k_range), 'k_scores': [float(s) for s in scores], 'elbow_value': int(k_opt)}
+            elbow_data = {'k_values': list(k_range), 'k_scores': [float(s) for s in scores], 'elbow_value': int(k_opt),
+                          'k_rule': k_rule, 'tau': tau,
+                          'gains': ({str(k): float(g) for k, g in gains.items()} if gains else None)}
 
         # --- POST-PROCESSING ---
         labels = final_model.labels_

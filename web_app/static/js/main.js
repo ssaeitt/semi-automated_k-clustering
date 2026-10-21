@@ -19,8 +19,12 @@ document.addEventListener('DOMContentLoaded', function() {
         p: document.getElementById('p'),
         delta: document.getElementById('delta'),
         threshold: document.getElementById('threshold'),
-        thresholdElbow: document.getElementById('thresholdElbow')
+        thresholdElbow: document.getElementById('thresholdElbow'),
+        earlyTimeIndex: document.getElementById('earlyTimeIndex'),
+        tau: document.getElementById('tau')
     };
+    const kRuleSelect = document.getElementById('kRule');
+    kRuleSelect.addEventListener('change', handleMethodChange);
 
     uploadForm.addEventListener('submit', handleFileUpload);
     previewType.addEventListener('change', updatePreviewPlot);
@@ -42,6 +46,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (key === 'beta') document.getElementById('beta-val').innerText = value;
                 if (key === 'gammaBlock') document.getElementById('gamma-val').innerText = value;
                 if (key === 'p') document.getElementById('p-val').innerText = value;
+                if (key === 'earlyTimeIndex') document.getElementById('early-val').innerText = (parseInt(value) < 0 ? 'off' : value);
+                if (key === 'tau') document.getElementById('tau-val').innerText = value;
                 if (key === 'thresholdElbow') {
                     const el = document.getElementById('t-elbow-val');
                     if(el) el.innerText = value;
@@ -111,7 +117,10 @@ document.addEventListener('DOMContentLoaded', function() {
             p: parseInt(sliders.p.value),
             delta: parseFloat(sliders.delta.value),
             threshold: parseFloat(sliders.threshold.value),
-            threshold_elbow: parseFloat(sliders.thresholdElbow.value)
+            threshold_elbow: parseFloat(sliders.thresholdElbow.value),
+            early_time_index: parseInt(sliders.earlyTimeIndex.value),
+            k_rule: kRuleSelect.value,
+            tau: parseFloat(sliders.tau.value)
         };
         if (method === 'semi_automated') params.backbone_method = backboneRadio.value;
 
@@ -168,6 +177,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateElbowPlot(elbowData) {
+        if (elbowData.k_rule === 'marginal_gain' && elbowData.gains) {
+            const ks = Object.keys(elbowData.gains).map(Number);
+            const gs = ks.map(k => elbowData.gains[String(k)]);
+            const bars = { x: ks, y: gs, type: 'bar', name: 'Gain of k-th cluster',
+                marker: { color: ks.map(k => k === elbowData.elbow_value ? '#2ca02c' : '#bbbbbb') } };
+            Plotly.newPlot('elbowPlot', [bars], {
+                title: 'Marginal gain: share of J(1) removed by the k-th cluster',
+                xaxis: { title: 'k', dtick: 1 }, yaxis: { title: 'gain / J(1)' },
+                shapes: [{ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: elbowData.tau, y1: elbowData.tau, line: { dash: 'dash', color: 'red' } }],
+                annotations: [{ xref: 'paper', yref: 'paper', x: 0.95, y: 0.95, text: `k_opt: ${elbowData.elbow_value}  (τ = ${elbowData.tau})`, showarrow: false, bordercolor: 'black' }]
+            });
+            return;
+        }
         const trace = { x: elbowData.k_values, y: elbowData.k_scores, mode: 'lines+markers', marker: { symbol: 'square', size: 10 } };
         const layout = {
             title: 'Slope-Ratio Elbow Method',
@@ -187,10 +209,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('backbone-ui').style.display = isSemi ? 'block' : 'none';
 
         // 2. Elbow Threshold Visibility (FIXED TYPO: elbowCont)
+        const rule = kRuleSelect.value;
+        document.getElementById('kRuleContainer').style.display = isSemi ? 'block' : 'none';
         const elbowCont = document.getElementById('elbowThresholdContainer');
         if (elbowCont) {
-            elbowCont.style.display = isSemi ? 'block' : 'none';
+            elbowCont.style.display = (isSemi && rule === 'elbow') ? 'block' : 'none';
         }
+        document.getElementById('tauContainer').style.display = (isSemi && rule === 'marginal_gain') ? 'block' : 'none';
 
         // 3. Backbone Check for K-Medoids logic
         const backbone = document.querySelector('input[name="backboneMethod"]:checked')?.value || 'kmeans';
@@ -198,6 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.getElementById('gammaContainer').style.display = showPhysics ? 'block' : 'none';
         document.getElementById('pContainer').style.display = showPhysics ? 'block' : 'none';
+        document.getElementById('earlyContainer').style.display = showPhysics ? 'block' : 'none';
 
         // 4. Box Visibility (FIXED QUOTE: 'additionalParamsBox')
         const additionalBox = document.getElementById('additionalParamsBox');

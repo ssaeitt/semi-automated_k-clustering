@@ -112,9 +112,27 @@
                             <input type="range" id="p" min="1" max="10" value="4" step="1">
                         </div>
 
+                        <div class="slider-group" id="earlyContainer">
+                            <label for="earlyTimeIndex">Early-time index (WBS block reaches start) <span id="early-val" class="slider-value">off</span></label>
+                            <input type="range" id="earlyTimeIndex" min="-1" max="10" value="-1" step="1">
+                        </div>
+
+                        <div class="slider-group" id="kRuleContainer" style="display: none;">
+                            <label for="kRule">k selection rule</label>
+                            <select id="kRule">
+                                <option value="elbow">Slope-ratio elbow (m_ratio)</option>
+                                <option value="marginal_gain">Marginal gain (τ)</option>
+                            </select>
+                        </div>
+
                         <div class="slider-group" id="elbowThresholdContainer" style="display: none;">
                             <label for="thresholdElbow">\(m_{ratio}\) Elbow Slopes Ratio <span id="t-elbow-val" class="slider-value">0.15</span></label>
                             <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01">
+                        </div>
+
+                        <div class="slider-group" id="tauContainer" style="display: none;">
+                            <label for="tau">\(\tau\) Minimum gain per added cluster (share of J(1)) <span id="tau-val" class="slider-value">0.04</span></label>
+                            <input type="range" id="tau" min="0.005" max="0.15" value="0.04" step="0.005">
                         </div>
                     </div>
 
@@ -171,8 +189,11 @@
             const elbowThresholdContainer = document.getElementById('elbowThresholdContainer');
     
             const isSemi = (method === 'semi_automated');
+            const rule = document.getElementById('kRule').value;
             backboneUI.style.display = isSemi ? 'block' : 'none';
-            elbowThresholdContainer.style.display = isSemi ? 'block' : 'none';
+            document.getElementById('kRuleContainer').style.display = isSemi ? 'block' : 'none';
+            elbowThresholdContainer.style.display = (isSemi && rule === 'elbow') ? 'block' : 'none';
+            document.getElementById('tauContainer').style.display = (isSemi && rule === 'marginal_gain') ? 'block' : 'none';
             nClustersContainer.style.display = isSemi ? 'none' : 'block';
 
             const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
@@ -181,8 +202,10 @@
             const showPhysics = (method === 'kmedoids' || (isSemi && backbone === 'kmedoids'));
             gammaContainer.style.display = showPhysics ? 'block' : 'none';
             pContainer.style.display = showPhysics ? 'block' : 'none';
+            document.getElementById('earlyContainer').style.display = showPhysics ? 'block' : 'none';
         }
 
+        document.getElementById('kRule').addEventListener('change', updateUIVisibility);
         document.getElementById('clusteringMethod').addEventListener('change', updateUIVisibility);
         document.querySelectorAll('input[name="backboneMethod"]').forEach(r => r.addEventListener('change', updateUIVisibility));
         window.onload = updateUIVisibility;
