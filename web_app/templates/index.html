@@ -4,211 +4,396 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flow Regime Identification</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Pinned versions: "plotly-latest" is frozen at an old 1.x release. -->
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <script>
+        window.MathJax = { tex: { inlineMath: [['\\(', '\\)']] }, chtml: { scale: 0.95 } };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
-    <div class="container">
-        <a href="https://github.com/ssaeitt/semi-automated_k-clustering" target="_blank" class="github-link" title="View on GitHub">
-            <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
-        </a>
-        <header>
-            <h1>Flow Regime Identification</h1>
-            <p>Upload your pressure transient diagnostic data and explore different clustering methods</p>
-        </header>
+    <header class="topbar">
+        <div class="brand">Flow Regime Identification</div>
+        <div class="topbar-status" id="status" role="status" aria-live="polite"></div>
+        <nav class="topbar-actions" aria-label="Tools">
+            <button type="button" id="presentToggle" class="ghost-btn" aria-pressed="false" title="Larger text and markers for projecting">
+                <i class="fas fa-expand" aria-hidden="true"></i><span>Presentation mode</span>
+            </button>
+            <button type="button" class="ghost-btn search-toggle" aria-controls="aiSidebar" aria-expanded="false">
+                <i class="fas fa-comment-dots" aria-hidden="true"></i><span>Ask AI</span>
+            </button>
+            <a href="https://github.com/ssaeitt/semi-automated_k-clustering" target="_blank" rel="noopener" class="ghost-btn" title="Source code on GitHub">
+                <i class="fab fa-github" aria-hidden="true"></i><span>GitHub</span>
+            </a>
+        </nav>
+    </header>
 
-        <div class="main-content">
-            <div class="controls-panel">
-                <div class="file-upload">
-                    <h2>Data Upload</h2>
-                    <p class="small-font"><em>Upload Excel/CSV with headers: "lndt", "dp", "dp_dlndt"</em></p>
-                    <form id="uploadForm" class="tidy-form">
-                        <div class="file-input-wrapper">
-                            <input type="file" id="fileInput" accept=".xlsx,.csv" required>
-                            <label for="fileInput" class="file-label"><i class="fas fa-file-upload"></i> Choose File</label>
+    <div class="app">
+        <!-- ============================ Control rail ============================ -->
+        <aside class="rail" aria-label="Data and clustering settings">
+            <div class="rail-scroll">
+                <section class="rail-section" id="dataSection">
+                    <h2>Data</h2>
+
+                    <div id="dataSummary" class="data-summary" hidden>
+                        <div class="data-name" id="dataName"></div>
+                        <div class="data-meta" id="dataMeta"></div>
+                        <ul class="data-notes" id="dataNotes"></ul>
+                        <button type="button" class="text-btn" id="changeData">Change data</button>
+                    </div>
+
+                    <form id="uploadForm" class="upload-form">
+                        <p class="field-help">Excel (.xlsx) or CSV with the columns lndt, dp and dp_dlndt.</p>
+                        <input type="file" id="fileInput" accept=".xlsx,.csv" class="visually-hidden" required>
+                        <label for="fileInput" class="file-drop">
+                            <i class="fas fa-file-arrow-up" aria-hidden="true"></i>
+                            <span id="fileName">Choose a file</span>
+                        </label>
+                        <div class="field-row" id="sheetRow" hidden>
+                            <label for="sheetName">Sheet</label>
+                            <select id="sheetName"></select>
                         </div>
-                        <div class="input-group-row">
-                            <label for="sheetName">Sheet Name</label>
-                            <input type="text" id="sheetName" value="Sheet1">
+                        <div class="form-actions">
+                            <button type="submit" class="secondary-btn" id="uploadBtn" disabled>Load data</button>
+                            <button type="button" class="text-btn" id="cancelChange" hidden>Cancel</button>
                         </div>
-                        <button type="submit" class="upload-btn">Upload & Preview</button>
                     </form>
-                </div>
+                    <div id="uploadReport" class="upload-report" role="alert" hidden></div>
+                </section>
 
-                <div class="data-preview-section" id="preview-controls">
-                    <h2>Data Preview</h2>
-                    <div class="method-selector">
-                        <label for="previewType">Plot Type</label>
-                        <select id="previewType">
-                            <option value="Normal Plot (p vs t)">Normal Plot (p vs t)</option>
-                            <option value="Semi-Log Plot (dp vs lnt)">Semi-Log Plot (p vs log t)</option>
-                            <option value="Log-Log Plot (Diagnostic)">Log-Log Plot (Diagnostic)</option>
-                        </select>
-                    </div>   
-                </div>
-
-                <div class="clustering-params">
-                    <h2>Clustering Parameters</h2>
-                    <div class="method-selector">
-                        <label for="clusteringMethod">Clustering Method</label>
+                <section class="rail-section">
+                    <h2>Method</h2>
+                    <div class="field">
+                        <label for="clusteringMethod" class="visually-hidden">Clustering method</label>
                         <select id="clusteringMethod">
                             <option value="kmeans">K-Means</option>
                             <option value="kmedoids">K-Medoids</option>
-                            <option value="semi_automated">Semi-Automated</option>
+                            <option value="semi_automated">Semi-automated (chooses k)</option>
                         </select>
                     </div>
 
-                    <div class="backbone-selector" id="backbone-ui" style="display: none;">
-                        <label>Backbone Method</label>
-                        <div class="radio-group">
-                            <label><input type="radio" name="backboneMethod" value="kmeans" checked> K-Means</label>
-                            <label style="margin-left: 15px;"><input type="radio" name="backboneMethod" value="kmedoids"> K-Medoids</label>
+                    <fieldset class="field backbone-selector" id="backbone-ui" hidden>
+                        <legend>Backbone</legend>
+                        <div class="segmented">
+                            <label><input type="radio" name="backboneMethod" value="kmeans" checked><span>K-Means</span></label>
+                            <label><input type="radio" name="backboneMethod" value="kmedoids"><span>K-Medoids</span></label>
+                        </div>
+                    </fieldset>
+
+                    <p id="kmeansNote" class="method-note">
+                        K-Means clusters the standardised segment features
+                        \(\mathbf f = [\lambda_E\hat x,\ \lambda_E\hat y,\ \lambda_\theta\hat m,\ \lambda_\tau\hat i]\)
+                        with plain Euclidean distance.
+                    </p>
+                </section>
+
+                <section class="rail-section" id="kRuleSection" hidden>
+                    <h2>Choosing k</h2>
+                    <fieldset class="field">
+                        <legend class="visually-hidden">Rule for choosing k</legend>
+                        <div class="segmented">
+                            <label><input type="radio" name="kRule" value="elbow" checked><span>Slope-ratio elbow</span></label>
+                            <label><input type="radio" name="kRule" value="marginal_gain"><span>Marginal gain</span></label>
+                        </div>
+                    </fieldset>
+
+                    <div class="slider-group" id="elbowThresholdContainer">
+                        <label for="thresholdElbow"><span>\(m_{ratio}\) Elbow slope ratio <button type="button" class="info-btn" data-info="mr" aria-label="About the elbow ratio">i</button></span><output id="t-elbow-val" class="slider-value">0.15</output></label>
+                        <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01">
+                        <div class="info-pop tex2jax_ignore" id="info-mr">
+                            \[r_k=\frac{|J_{k+1}-J_k|}{|J_k-J_{k-1}|}\]
+                            \(J_k\) is the distortion with \(k\) clusters. The chosen \(k\) is the first one with \(r_k&lt;m_{ratio}\).
+                            If none qualifies, the app falls back to \(k=3\) and says so on the Choosing k tab.
                         </div>
                     </div>
 
+                    <div class="slider-group" id="tauContainer" hidden>
+                        <label for="tau"><span>\(\tau\) Minimum gain per cluster <button type="button" class="info-btn" data-info="tau" aria-label="About tau">i</button></span><output id="tau-val" class="slider-value">0.040</output></label>
+                        <input type="range" id="tau" min="0.005" max="0.15" value="0.04" step="0.005">
+                        <div class="info-pop tex2jax_ignore" id="info-tau">
+                            \[g_k=\frac{J_{k-1}-J_k}{J_1},\qquad k^*=\max\{k : g_k\ge\tau\}\]
+                            \(g_k\) is the share of the one-cluster cost \(J_1\) removed by adding the \(k\)-th cluster.
+                            The chosen \(k\) is the largest one whose cluster still removes at least \(\tau\). If none does, \(k=1\).
+                        </div>
+                    </div>
+                </section>
+
+                <section class="rail-section">
+                    <h2>Segments and clusters</h2>
                     <div class="slider-group" id="nClustersContainer">
-                        <label for="nClusters">Clusters <span id="n-clusters-val" class="slider-value">4</span></label>
+                        <label for="nClusters"><span>Clusters \(k\) <button type="button" class="info-btn" data-info="k" aria-label="About the number of clusters">i</button></span><output id="n-clusters-val" class="slider-value">4</output></label>
                         <input type="range" id="nClusters" min="2" max="10" value="4" step="1">
+                        <div class="info-pop tex2jax_ignore" id="info-k">
+                            The number of regimes you ask the algorithm for. It always returns exactly \(k\) clusters,
+                            whether or not the data contains that many physical flow regimes.
+                        </div>
                     </div>
 
                     <div class="slider-group">
-                        <label for="windowSize">Window <span id="window-val" class="slider-value">5</span></label>
+                        <label for="windowSize"><span>Window \(w\) <button type="button" class="info-btn" data-info="w" aria-label="About the window size">i</button></span><output id="window-val" class="slider-value">5</output></label>
                         <input type="range" id="windowSize" min="2" max="21" value="5" step="1">
+                        <div class="info-pop tex2jax_ignore" id="info-w">
+                            Points per segment. The data are cut into \(\lfloor n/w \rfloor\) non-overlapping segments and each
+                            segment gets one label. The last \(n \bmod w\) points are not clustered (grey in the plots).
+                        </div>
                     </div>
+                </section>
 
-                    <div class="hyperparameter-section">
-                        <h3>Dissimilarity weights</h3>
+                <section class="rail-section">
+                    <h2>Dissimilarity weights</h2>
 
-                        <div class="slider-group">
-                            <label for="lambdaE">\(\lambda_E\) Euclidean Distance <span id="le-val" class="slider-value">1.0</span></label>
-                            <input type="range" id="lambdaE" min="0" max="5" value="1.0" step="0.1">
-                        </div>
-
-                        <div class="slider-group">
-                            <label for="lambdaP">\(\lambda_{\Theta}\) Angular (Slope) <span id="lp-val" class="slider-value">1.0</span></label>
-                            <input type="range" id="lambdaP" min="0" max="5" value="1.0" step="0.1">
-                        </div>
-
-                        <div class="slider-group">
-                            <label for="beta">\(\lambda_{\tau}\) Temporal (Boundary) <span id="beta-val" class="slider-value">0.5</span></label>
-                            <input type="range" id="beta" min="0" max="5" value="0.5" step="0.1">
-                        </div>
-
-                        <div class="slider-group" id="gammaContainer">
-                            <label for="gammaBlock">\(\lambda_{\Lambda}\) Inverted-V (Shape) <span id="gamma-val" class="slider-value">1.0</span></label>
-                            <input type="range" id="gammaBlock" min="0" max="5" value="1.0" step="0.1">
+                    <div class="slider-group">
+                        <label for="lambdaE"><span>\(\lambda_E\) Euclidean <button type="button" class="info-btn" data-info="le" aria-label="About lambda E">i</button></span><output id="le-val" class="slider-value">1.0</output></label>
+                        <input type="range" id="lambdaE" min="0" max="5" value="1.0" step="0.1">
+                        <div class="info-pop tex2jax_ignore" id="info-le">
+                            \[\tilde d_{E,ij}=\frac{1}{D_{E,\max}}\sqrt{\sum_{k=1}^{w}(x_{ik}-x_{jk})^2+(y_{ik}-y_{jk})^2}\]
+                            Separates segments that sit far apart on the normalised log-log plot.
                         </div>
                     </div>
 
-                    <div class="hyperparameter-section" id="additionalParamsBox">
-                        <h3>Additional Parameters</h3>
-                        
-                        <div class="slider-group" id="pContainer">
-                            <label for="p">\(V-Size\) Inverted-V (Block Size) <span id="p-val" class="slider-value">4</span></label>
-                            <input type="range" id="p" min="1" max="10" value="4" step="1">
-                        </div>
-
-                        <div class="slider-group" id="earlyContainer">
-                            <label for="earlyTimeIndex">Early-time index (WBS block reaches start) <span id="early-val" class="slider-value">off</span></label>
-                            <input type="range" id="earlyTimeIndex" min="-1" max="10" value="-1" step="1">
-                        </div>
-
-                        <div class="slider-group" id="kRuleContainer" style="display: none;">
-                            <label for="kRule">k selection rule</label>
-                            <select id="kRule">
-                                <option value="elbow">Slope-ratio elbow (m_ratio)</option>
-                                <option value="marginal_gain">Marginal gain (τ)</option>
-                            </select>
-                        </div>
-
-                        <div class="slider-group" id="elbowThresholdContainer" style="display: none;">
-                            <label for="thresholdElbow">\(m_{ratio}\) Elbow Slopes Ratio <span id="t-elbow-val" class="slider-value">0.15</span></label>
-                            <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01">
-                        </div>
-
-                        <div class="slider-group" id="tauContainer" style="display: none;">
-                            <label for="tau">\(\tau\) Minimum gain per added cluster (share of J(1)) <span id="tau-val" class="slider-value">0.04</span></label>
-                            <input type="range" id="tau" min="0.005" max="0.15" value="0.04" step="0.005">
+                    <div class="slider-group">
+                        <label for="lambdaP"><span>\(\lambda_\theta\) Angular (slope) <button type="button" class="info-btn" data-info="lp" aria-label="About lambda theta">i</button></span><output id="lp-val" class="slider-value">1.0</output></label>
+                        <input type="range" id="lambdaP" min="0" max="5" value="1.0" step="0.1">
+                        <div class="info-pop tex2jax_ignore" id="info-lp">
+                            \[\tilde d_{\theta,ij}=\frac{\left|\arctan m_i-\arctan m_j\right|}{90^\circ}\]
+                            \(m\) is the log-log slope of the derivative in each segment. Segments with different slopes behave like different flow regimes.
                         </div>
                     </div>
 
-                    <button id="updatePlot" class="update-btn" style="margin-top: 10px;" disabled>Run Clustering</button>
-                </div>
+                    <div class="slider-group">
+                        <label for="beta"><span>\(\lambda_\tau\) Temporal <button type="button" class="info-btn" data-info="beta" aria-label="About lambda tau">i</button></span><output id="beta-val" class="slider-value">0.5</output></label>
+                        <input type="range" id="beta" min="0" max="5" value="0.5" step="0.1">
+                        <div class="info-pop tex2jax_ignore" id="info-beta">
+                            \[\tilde d_{\tau,ij}=\frac{\max(0,\ |i-j|-1)}{T_{\max}}\]
+                            Penalises grouping segments that are far apart in time, which keeps each regime one continuous interval.
+                        </div>
+                    </div>
+
+                    <div class="slider-group" id="gammaContainer">
+                        <label for="gammaBlock"><span>\(\lambda_\Lambda\) Inverted-V (shape) <button type="button" class="info-btn" data-info="gb" aria-label="About lambda Lambda">i</button></span><output id="gamma-val" class="slider-value">1.0</output></label>
+                        <input type="range" id="gammaBlock" min="0" max="5" value="1.0" step="0.1">
+                        <div class="info-pop tex2jax_ignore" id="info-gb">
+                            \[\tilde d_{\Lambda,ij}=\begin{cases}-1 & \text{both segments in an inverted-V block}\\ 0 & \text{otherwise}\end{cases}\]
+                            Pulls the wellbore-storage hump (a rising segment followed by a falling one) into the same cluster.
+                        </div>
+                    </div>
+                </section>
+
+                <section class="rail-section" id="additionalParamsBox">
+                    <h2>Additional parameters</h2>
+
+                    <div class="slider-group" id="pContainer">
+                        <label for="p"><span>\(p\) V-size (block) <button type="button" class="info-btn" data-info="p" aria-label="About the V-size">i</button></span><output id="p-val" class="slider-value">4</output></label>
+                        <input type="range" id="p" min="1" max="10" value="4" step="1">
+                        <div class="info-pop tex2jax_ignore" id="info-p">
+                            A block of \(p\) consecutive segments is flagged when it contains a pair with \(m_j&gt;0\) followed by \(m_{j+1}&lt;0\).
+                            Flagged segments are shaded in the Segmentation tab.
+                        </div>
+                    </div>
+
+                    <div class="slider-group" id="earlyContainer">
+                        <label for="earlyTimeIndex"><span>\(i_{early}\) Early-time index <button type="button" class="info-btn" data-info="early" aria-label="About the early-time index">i</button></span><output id="early-val" class="slider-value">off</output></label>
+                        <input type="range" id="earlyTimeIndex" min="-1" max="10" value="-1" step="1">
+                        <div class="info-pop tex2jax_ignore" id="info-early">
+                            If an inverted-V block starts at segment index \(i \le i_{early}\) (the first segment is 0), the flag is
+                            extended back to the first segment, so the unit-slope rise before the hump joins the hump.
+                            At the far left the slider is off. The Segmentation tab shows which segments end up flagged.
+                        </div>
+                    </div>
+
+                    <details class="advanced" id="advancedBox">
+                        <summary>Advanced</summary>
+                        <div class="slider-group">
+                            <label for="delta"><span>\(\delta\) Concavity bonus <button type="button" class="info-btn" data-info="delta" aria-label="About delta">i</button></span><output id="delta-val" class="slider-value">0.10</output></label>
+                            <input type="range" id="delta" min="0" max="1" value="0.1" step="0.01">
+                            <div class="info-pop tex2jax_ignore" id="info-delta">
+                                For adjacent segments with curvature radius
+                                \(R=\frac{(1+\bar m^2)^{3/2}}{|\Delta m/\Delta x|}&gt;2\Delta x\), the dissimilarity is reduced by \(\delta\).
+                            </div>
+                        </div>
+                        <div class="slider-group">
+                            <label for="threshold"><span>\(m_0\) Near-zero slope <button type="button" class="info-btn" data-info="thr" aria-label="About the near-zero slope threshold">i</button></span><output id="thr-val" class="slider-value">0.10</output></label>
+                            <input type="range" id="threshold" min="0" max="1" value="0.1" step="0.01">
+                            <div class="info-pop tex2jax_ignore" id="info-thr">
+                                If two adjacent segments both have \(|m|&lt;m_0\), their dissimilarity is replaced by \(0.1\,\lambda_E\tilde d_E\),
+                                which strongly favours keeping a flat plateau together. (The original script used \(m_0=1\).)
+                            </div>
+                        </div>
+                    </details>
+                </section>
             </div>
 
-            <input type="hidden" id="delta" value="0.1">
-            <input type="hidden" id="threshold" value="0.1">
-
-            <div class="visualization-panel">
-                <div class="plot-container">
-                    <div id="clusterPlot" class="plot"></div>
-                </div>
-                <div id="elbowPlotContainer" class="plot-container" style="display: none;">
-                    <div id="elbowPlot" class="plot"></div>
-                </div>
+            <div class="rail-footer">
+                <label class="toggle">
+                    <input type="checkbox" id="autoUpdate" checked>
+                    <span class="toggle-track" aria-hidden="true"></span>
+                    <span>Update as I move sliders</span>
+                </label>
+                <button id="updatePlot" class="primary-btn" disabled>Run clustering</button>
+                <p class="hint" id="runHint">Load data to start.</p>
             </div>
-        </div>
+        </aside>
+
+        <!-- ============================ Workspace ============================ -->
+        <main class="workspace">
+            <div id="errorBanner" class="error-banner" role="alert" hidden>
+                <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+                <span id="errorText"></span>
+                <button type="button" class="icon-btn" id="dismissError" aria-label="Dismiss">&times;</button>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Views">
+                <button class="tab active" role="tab" aria-selected="true" data-tab="preview">Preview</button>
+                <button class="tab" role="tab" data-tab="results" aria-disabled="true" data-reason="Run clustering first.">Results</button>
+                <button class="tab" role="tab" data-tab="segmentation" aria-disabled="true" data-reason="Run clustering first.">Segmentation</button>
+                <button class="tab" role="tab" data-tab="matrix" aria-disabled="true" data-reason="Run clustering first.">Dissimilarity</button>
+                <button class="tab" role="tab" data-tab="elbow" aria-disabled="true" data-reason="Available for the semi-automated method only.">Choosing k</button>
+                <button class="tab" role="tab" data-tab="compare" aria-disabled="true" data-reason="Run clustering first.">Compare</button>
+                <span class="tab-reason" id="tabReason" aria-live="polite"></span>
+            </div>
+
+            <section class="tab-panel active" id="panel-preview">
+                <div class="plot-toolbar">
+                    <label for="previewType" class="toolbar-label">Plot</label>
+                    <select id="previewType">
+                        <option value="loglog" selected>Log-log diagnostic (Δp, Δp′ vs Δt)</option>
+                        <option value="semilog">Semi-log (Δp vs log Δt)</option>
+                        <option value="cartesian">Cartesian (Δp vs Δt)</option>
+                    </select>
+                </div>
+                <div id="previewPlot" class="plot"><div class="empty-state">Load a data file to see its diagnostic plot.</div></div>
+            </section>
+
+            <section class="tab-panel" id="panel-results">
+                <div class="plot-toolbar">
+                    <span class="toolbar-label">Guide lines</span>
+                    <label><input type="checkbox" class="guide-toggle" value="1"> m = 1</label>
+                    <label><input type="checkbox" class="guide-toggle" value="0.5"> m = ½</label>
+                    <label><input type="checkbox" class="guide-toggle" value="0"> m = 0</label>
+                    <span class="toolbar-hint">Click a point to move the lines through it.</span>
+                    <button id="pinRun" class="secondary-btn small"><i class="fas fa-thumbtack" aria-hidden="true"></i> Pin for comparison</button>
+                </div>
+                <div class="results-layout">
+                    <div class="results-main">
+                        <div id="resultsPlot" class="plot"></div>
+                    </div>
+                    <aside class="results-side" aria-label="Physics checks">
+                        <h3>Physics checks</h3>
+                        <div class="check-controls">
+                            <label for="plateauRegime">Plateau regime</label>
+                            <select id="plateauRegime"></select>
+                            <label for="plateauTol">Tolerance |m| ≤</label>
+                            <input type="number" id="plateauTol" value="0.05" min="0" max="1" step="0.01">
+                        </div>
+                        <ul class="checks" id="checksList"></ul>
+                    </aside>
+                </div>
+                <div class="results-lower">
+                    <div class="panel">
+                        <h3>Regimes</h3>
+                        <div class="table-wrap"><table class="data-table" id="regimeTable"></table></div>
+                    </div>
+                    <div class="panel">
+                        <h3>Permeability estimate <span class="muted">(optional)</span></h3>
+                        <p class="field-help">Oil, field units, from the median \(\Delta p'\) of the plateau regime:
+                            \(kh = 70.6\,qB\mu/\Delta p'\).</p>
+                        <div class="kh-grid">
+                            <label for="khQ">q (STB/d)</label><input type="number" id="khQ" min="0" step="any">
+                            <label for="khB">B (rb/STB)</label><input type="number" id="khB" min="0" step="any">
+                            <label for="khMu">μ (cp)</label><input type="number" id="khMu" min="0" step="any">
+                            <label for="khH">h (ft, optional)</label><input type="number" id="khH" min="0" step="any">
+                        </div>
+                        <div id="khResult" class="kh-result">Enter q, B and μ.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tab-panel" id="panel-segmentation">
+                <p class="panel-note">Each segment's straight-line fit of \(\ln\Delta p'\) against \(\ln\Delta t\); its slope \(m\) is what \(\lambda_\theta\) compares.
+                    Dotted lines mark segment boundaries. Shaded segments were flagged by the inverted-V test (K-Medoids only).</p>
+                <div id="segPlot" class="plot"></div>
+            </section>
+
+            <section class="tab-panel" id="panel-matrix">
+                <div class="plot-toolbar" id="matrixToolbar">
+                    <label for="matrixTerm" class="toolbar-label">Show</label>
+                    <select id="matrixTerm">
+                        <option value="total">Total dissimilarity</option>
+                        <option value="E">λE · Euclidean term</option>
+                        <option value="P">λθ · Angular term</option>
+                        <option value="T">λτ · Temporal term</option>
+                        <option value="B">λΛ · Inverted-V term</option>
+                        <option value="C">δ · Concavity term</option>
+                    </select>
+                </div>
+                <p class="panel-note" id="matrixNote"></p>
+                <div id="matrixPlot" class="plot square"></div>
+            </section>
+
+            <section class="tab-panel" id="panel-elbow">
+                <div id="elbowBanner" class="banner"></div>
+                <div id="elbowPlot" class="plot tall"></div>
+            </section>
+
+            <section class="tab-panel" id="panel-compare">
+                <p class="panel-note" id="compareNote">Pin a run on the Results tab, then change data or parameters and run again.</p>
+                <div class="compare-grid">
+                    <div class="panel">
+                        <h3>Pinned</h3>
+                        <div id="comparePinnedPlot" class="plot small"></div>
+                        <div id="comparePinnedInfo" class="compare-info"></div>
+                    </div>
+                    <div class="panel">
+                        <h3>Current</h3>
+                        <div id="compareCurrentPlot" class="plot small"></div>
+                        <div id="compareCurrentInfo" class="compare-info"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="history-section" aria-labelledby="historyTitle">
+                <div class="history-header">
+                    <h2 id="historyTitle">Run history</h2>
+                    <div class="history-actions">
+                        <button id="exportHistory" class="secondary-btn small" disabled><i class="fas fa-file-csv" aria-hidden="true"></i> Export CSV</button>
+                        <button id="clearHistory" class="text-btn" disabled>Clear</button>
+                    </div>
+                </div>
+                <p class="field-help">Runs are kept in this browser. Moving the same slider several times within a few seconds counts as one run. Use Restore to put a run's settings back on the sliders.</p>
+                <div class="table-wrap"><table class="data-table" id="historyTable"></table></div>
+            </section>
+        </main>
     </div>
 
-    <div class="search-sidebar">
-        <div class="search-header"><h2>AI Search</h2><button class="close-sidebar"><i class="fas fa-times"></i></button></div>
-        <div class="search-tabs"><button class="search-tab active" data-tab="ai">AI Assistant</button></div>
+    <aside class="search-sidebar" id="aiSidebar" aria-label="AI assistant">
+        <div class="search-header"><h2>Ask AI</h2><button class="close-sidebar icon-btn" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
         <div class="search-content">
             <div class="ai-search-container">
                 <div class="search-input-container">
-                    <input type="text" class="search-input" placeholder="Ask about well testing...">
-                    <button class="search-button" id="searchButton"><i class="fas fa-search"></i></button>
+                    <input type="text" class="search-input" placeholder="Ask about well testing…" aria-label="Question">
+                    <button class="search-button" id="searchButton" aria-label="Ask"><i class="fas fa-paper-plane"></i></button>
+                    <button class="stop-button" id="stopButton" aria-label="Stop" style="display: none;"><i class="fas fa-stop"></i></button>
                 </div>
                 <div class="model-dropdown-container" id="modelDropdownContainer">
-                    <div class="model-dropdown-button" id="modelDropdownButton"><span id="selectedModel">DeepSeek R1-free</span><i class="fas fa-chevron-down"></i></div>
+                    <div class="model-dropdown-button" id="modelDropdownButton"><span id="selectedModel">{{ ai_models[0].label }}</span><i class="fas fa-chevron-down"></i></div>
                     <div class="model-dropdown-menu" id="modelDropdownMenu">
-                        <div class="model-option selected" data-model="deepseek/deepseek-r1:free">DeepSeek R1-free</div>
-                        <div class="model-option" data-model="qwen/qwq-32b:free">Qwen 32B-free</div>
+                        {% for m in ai_models %}
+                        <div class="model-option{% if loop.first %} selected{% endif %}" data-model="{{ m.id }}">{{ m.label }}</div>
+                        {% endfor %}
                     </div>
                 </div>
+                <p class="field-help ai-warning">AI answers can be wrong. Check them against your course material.</p>
             </div>
             <div class="search-results"></div>
         </div>
-    </div>
-    <div class="search-toggle"><i class="fas fa-search"></i></div>
+    </aside>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
-    
-    <script>
-        function updateUIVisibility() {
-            const method = document.getElementById('clusteringMethod').value;
-            const nClustersContainer = document.getElementById('nClustersContainer');
-            const backboneUI = document.getElementById('backbone-ui');
-            const gammaContainer = document.getElementById('gammaContainer');
-            const pContainer = document.getElementById('pContainer');
-            const elbowThresholdContainer = document.getElementById('elbowThresholdContainer');
-    
-            const isSemi = (method === 'semi_automated');
-            const rule = document.getElementById('kRule').value;
-            backboneUI.style.display = isSemi ? 'block' : 'none';
-            document.getElementById('kRuleContainer').style.display = isSemi ? 'block' : 'none';
-            elbowThresholdContainer.style.display = (isSemi && rule === 'elbow') ? 'block' : 'none';
-            document.getElementById('tauContainer').style.display = (isSemi && rule === 'marginal_gain') ? 'block' : 'none';
-            nClustersContainer.style.display = isSemi ? 'none' : 'block';
-
-            const backboneRadio = document.querySelector('input[name="backboneMethod"]:checked');
-            const backbone = backboneRadio ? backboneRadio.value : 'kmeans';
-
-            const showPhysics = (method === 'kmedoids' || (isSemi && backbone === 'kmedoids'));
-            gammaContainer.style.display = showPhysics ? 'block' : 'none';
-            pContainer.style.display = showPhysics ? 'block' : 'none';
-            document.getElementById('earlyContainer').style.display = showPhysics ? 'block' : 'none';
-        }
-
-        document.getElementById('kRule').addEventListener('change', updateUIVisibility);
-        document.getElementById('clusteringMethod').addEventListener('change', updateUIVisibility);
-        document.querySelectorAll('input[name="backboneMethod"]').forEach(r => r.addEventListener('change', updateUIVisibility));
-        window.onload = updateUIVisibility;
-    </script>
 </body>
 </html>

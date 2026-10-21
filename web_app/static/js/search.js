@@ -1,178 +1,121 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // DOM Elements
+document.addEventListener('DOMContentLoaded', function () {
     const searchSidebar = document.querySelector('.search-sidebar');
     const searchToggle = document.querySelector('.search-toggle');
     const closeSidebar = document.querySelector('.close-sidebar');
-    const searchTabs = document.querySelectorAll('.search-tab');
-    const searchInput = document.querySelector('.search-input'); // Using the class selector
+    const searchInput = document.querySelector('.search-input');
     const searchButton = document.getElementById('searchButton');
+    const stopButton = document.getElementById('stopButton');
     const searchResults = document.querySelector('.search-results');
-    const container = document.querySelector('.container');
-    const stopButton = document.querySelector('.stop-button');
-    
-    // Model dropdown elements
-    const modelDropdownContainer = document.getElementById('modelDropdownContainer');
     const modelDropdownButton = document.getElementById('modelDropdownButton');
     const modelDropdownMenu = document.getElementById('modelDropdownMenu');
     const selectedModelText = document.getElementById('selectedModel');
     const modelOptions = document.querySelectorAll('.model-option');
 
-    // State
-    let currentTab = 'ai'; // Default to AI
-    let selectedModel = 'deepseek/deepseek-r1:free';
-    let isSearching = false;
-    let currentController = null; 
+    if (!searchSidebar || !searchInput || !searchButton) return;
 
-    // Event Listeners
+    const firstOption = document.querySelector('.model-option');
+    let selectedModel = firstOption ? firstOption.dataset.model : '';
+    let isSearching = false;
+    let currentController = null;
+
     searchToggle.addEventListener('click', toggleSidebar);
     closeSidebar.addEventListener('click', toggleSidebar);
-    searchTabs.forEach(tab => {
-        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-    });
-    
     searchButton.addEventListener('click', performSearch);
     stopButton.addEventListener('click', stopSearch);
-    
-    searchInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !isSearching) {
-            performSearch();
-        }
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && searchSidebar.classList.contains('active')) toggleSidebar();
     });
-    
-    modelDropdownButton.addEventListener('click', toggleModelDropdown);
-    
-    modelOptions.forEach(option => {
-        option.addEventListener('click', function() {
-            selectModel(this.dataset.model, this.textContent);
-            toggleModelDropdown();
-        });
+    searchInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !isSearching) performSearch();
     });
+    modelDropdownButton.addEventListener('click', () => modelDropdownMenu.classList.toggle('show'));
+    modelOptions.forEach(option => option.addEventListener('click', function () {
+        selectedModel = this.dataset.model;
+        selectedModelText.textContent = this.textContent;
+        modelOptions.forEach(o => o.classList.toggle('selected', o === this));
+        modelDropdownMenu.classList.remove('show');
+    }));
 
-    // Functions
     function toggleSidebar() {
-        searchSidebar.classList.toggle('active');
-        container.classList.toggle('sidebar-active');
-        if (searchSidebar.classList.contains('active')) {
-            searchInput.focus();
-        }
-        
+        const open = searchSidebar.classList.toggle('active');
+        searchToggle.setAttribute('aria-expanded', String(open));
+        if (open) searchInput.focus();
         setTimeout(() => {
-            if (window.Plotly) {
-                const clusterPlot = document.getElementById('clusterPlot');
-                const elbowPlot = document.getElementById('elbowPlot');
-                if (clusterPlot) Plotly.Plots.resize(clusterPlot);
-                if (elbowPlot) Plotly.Plots.resize(elbowPlot);
-            }
+            if (window.Plotly) document.querySelectorAll('.js-plotly-plot').forEach(el => Plotly.Plots.resize(el));
         }, 300);
     }
 
-    function switchTab(tab) {
-        currentTab = tab;
-        searchTabs.forEach(t => t.classList.remove('active'));
-        const activeTabEl = document.querySelector(`[data-tab="${tab}"]`);
-        if (activeTabEl) activeTabEl.classList.add('active');
-        
-        searchResults.innerHTML = ''; 
-        modelDropdownContainer.style.display = tab === 'ai' ? 'block' : 'none';
-        
-        if (tab === 'web') {
-            searchInput.placeholder = "Web Search is disabled...";
-            searchInput.disabled = true; // Visual cue that we are using AI only
-        } else {
-            searchInput.placeholder = "Ask AI about Well Test Analysis...";
-            searchInput.disabled = false;
-        }
-    }
-    
-    function toggleModelDropdown() {
-        modelDropdownMenu.classList.toggle('show');
-    }
-    
-    function selectModel(modelId, modelName) {
-        selectedModel = modelId;
-        selectedModelText.textContent = modelName;
-        modelOptions.forEach(option => {
-            option.dataset.model === modelId ? option.classList.add('selected') : option.classList.remove('selected');
-        });
+    function stopSearch() {
+        if (currentController) currentController.abort();
     }
 
-    function stopSearch() {
-        if (currentController) {
-            currentController.abort();
-            currentController = null;
-        }
-        isSearching = false;
-        stopButton.style.display = 'none';
-        searchButton.innerHTML = '<i class="fas fa-search"></i>';
-        searchButton.disabled = false;
+    function setBusy(busy) {
+        isSearching = busy;
+        stopButton.style.display = busy ? 'block' : 'none';
+        searchButton.disabled = busy;
+        searchButton.innerHTML = busy ? '<div class="loading-spinner"></div>' : '<i class="fas fa-search"></i>';
+    }
+
+    function showMessage(text, isError) {
+        searchResults.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'search-result-item' + (isError ? ' error' : '');
+        div.textContent = text;
+        searchResults.appendChild(div);
     }
 
     async function performSearch() {
         const query = searchInput.value.trim();
         if (!query || isSearching) return;
-
-        isSearching = true;
-        stopButton.style.display = 'block';
-        searchButton.innerHTML = '<div class="loading-spinner"></div>';
-        searchButton.disabled = true;
-        
+        setBusy(true);
+        currentController = new AbortController();
         try {
-            currentController = new AbortController();
-            const signal = currentController.signal;
-            
-            if (currentTab === 'ai') {
-                initializeAIResultContainer();
-                
-                const response = await fetch('/ai_search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        query: query,
-                        model: selectedModel,
-                        stream: true 
-                    }),
-                    signal
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'AI Search Error');
+            const response = await fetch('/ai_search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: query, model: selectedModel }),
+                signal: currentController.signal
+            });
+            if (!response.ok) {
+                let msg = `AI search failed (HTTP ${response.status}).`;
+                try { msg = (await response.json()).error || msg; } catch (e) { /* not JSON */ }
+                throw new Error(msg);
+            }
+            initializeAIResultContainer();
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+            let gotAnswer = false;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    let data;
+                    try { data = JSON.parse(line); } catch (e) { continue; }
+                    if (data.token_type === 'error') throw new Error(data.token);
+                    if (data.token_type === 'answer') gotAnswer = true;
+                    processStreamedData(data);
                 }
-                
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let buffer = '';
-                
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    buffer += decoder.decode(value, { stream: true });
-                    let lines = buffer.split('\n');
-                    buffer = lines.pop(); 
-                    
-                    for (const line of lines) {
-                        if (line.trim()) {
-                            try {
-                                const data = JSON.parse(line);
-                                processStreamedData(data);
-                            } catch (e) { console.error("JSON parse error", e); }
-                        }
-                    }
-                }
-                finalizeAIResult();
+            }
+            if (!gotAnswer) {
+                document.querySelector('.answer-section').style.display = 'block';
+                document.querySelector('.answer-content').textContent = '(The model returned no answer. Try again or pick another model.)';
             }
         } catch (error) {
             if (error.name === 'AbortError') {
-                searchResults.innerHTML = '<div class="search-result-item">Search cancelled</div>';
+                const note = document.createElement('div');
+                note.className = 'search-result-item';
+                note.textContent = 'Search stopped.';
+                searchResults.appendChild(note);
             } else {
-                searchResults.innerHTML = `<div class="search-result-item error">Error: ${error.message}</div>`;
+                showMessage('Error: ' + error.message, true);
             }
         } finally {
-            searchButton.innerHTML = '<i class="fas fa-search"></i>';
-            searchButton.disabled = false;
-            isSearching = false;
-            stopButton.style.display = 'none';
+            setBusy(false);
             currentController = null;
         }
     }
@@ -180,9 +123,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializeAIResultContainer() {
         searchResults.innerHTML = `
             <div class="search-result-item ai-result">
-                <div class="model-info"><i class="fas fa-robot"></i> ${selectedModelText.textContent}</div>
-                <div class="thinking-section">
-                    <div class="thinking-header"><i class="fas fa-brain"></i> Thinking Process</div>
+                <div class="model-info"><i class="fas fa-robot"></i> <span class="model-name"></span></div>
+                <div class="thinking-section" style="display: none;">
+                    <div class="thinking-header"><i class="fas fa-brain"></i> Thinking process</div>
                     <div class="thinking-content"></div>
                 </div>
                 <div class="answer-section" style="display: none;">
@@ -190,27 +133,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="answer-content"></div>
                 </div>
             </div>`;
+        searchResults.querySelector('.model-name').textContent = selectedModelText.textContent;
     }
 
     function processStreamedData(data) {
-        const thinkingContent = document.querySelector('.thinking-content');
-        const answerSection = document.querySelector('.answer-section');
-        const answerContent = document.querySelector('.answer-content');
-        
-        if (data.token_type === 'thinking' && data.token) {
-            thinkingContent.innerText += data.token; // Using innerText for streaming safety
-            thinkingContent.scrollTop = thinkingContent.scrollHeight;
-        } else if (data.token_type === 'answer' && data.token) {
-            answerSection.style.display = 'block';
-            answerContent.innerText += data.token;
-            answerContent.scrollTop = answerContent.scrollHeight;
+        if (!data.token) return;
+        if (data.token_type === 'thinking') {
+            const sec = document.querySelector('.thinking-section');
+            const el = document.querySelector('.thinking-content');
+            sec.style.display = 'block';
+            el.textContent += data.token;
+            el.scrollTop = el.scrollHeight;
+        } else if (data.token_type === 'answer') {
+            document.querySelector('.answer-section').style.display = 'block';
+            document.querySelector('.answer-content').textContent += data.token;
         }
     }
-
-    function finalizeAIResult() {
-        // Final UI cleanup if needed
-    }
-
-    // Initialize the UI on AI Tab
-    switchTab('ai');
 });
