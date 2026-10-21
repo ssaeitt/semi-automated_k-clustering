@@ -699,18 +699,36 @@ document.addEventListener('DOMContentLoaded', function () {
         $('regimeTable').innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
     }
 
-    function flattestRegime(res) {
+    // Default plateau regime for the checks and kh: the regime at the first derivative
+    // minimum after the wellbore-storage hump (segment slopes: first + then -, then the
+    // next - then +), which is where IARF sits. The slope of one line fitted through a
+    // whole regime is not used: the WBS hump rises and falls, so that fit is near zero
+    // and the hump would be taken for the plateau. If no hump-then-trough is found
+    // (e.g. no storage hump), fall back to the regime of the segment with the smallest |m|.
+    function plateauRegime(res) {
+        const w = res.windows, s = w.map(x => x.slope), n = s.length;
+        let hump = -1;
+        for (let j = 0; j < n - 1; j++) { if (s[j] > 0 && s[j + 1] < 0) { hump = j; break; } }
+        if (hump >= 0) {
+            for (let k = hump + 1; k < n - 1; k++) {
+                if (s[k] < 0 && s[k + 1] >= 0) {
+                    const pick = Math.abs(s[k]) <= Math.abs(s[k + 1]) ? k : k + 1;
+                    return { cluster: w[pick].cluster, how: 'derivative minimum' };
+                }
+            }
+        }
         let best = 0;
-        res.regimes.forEach((r, i) => { if (Math.abs(r.slope_fit) < Math.abs(res.regimes[best].slope_fit)) best = i; });
-        return best;
+        s.forEach((v, i) => { if (Math.abs(v) < Math.abs(s[best])) best = i; });
+        return { cluster: w[best].cluster, how: 'flattest segment' };
     }
+    function defaultPlateau(res) { return plateauRegime(res).cluster; }
 
     function populatePlateauSelect() {
         const res = state.current.res;
-        const flat = flattestRegime(res);
+        const guess = plateauRegime(res);
         el.plateauRegime.innerHTML = res.regimes.map(r =>
-            `<option value="${r.cluster}">${regimeName(r.cluster)}${r.cluster === flat ? ' (flattest)' : ''}</option>`).join('');
-        el.plateauRegime.value = String(flat);
+            `<option value="${r.cluster}">${regimeName(r.cluster)}${r.cluster === guess.cluster ? ` (${guess.how})` : ''}</option>`).join('');
+        el.plateauRegime.value = String(guess.cluster);
     }
 
     // Pure check computation, also used for history rows and comparison.
@@ -1007,7 +1025,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function runInfo(run) {
         const p = run.params;
-        const ck = computeChecks(run.res, flattestRegime(run.res), Number(el.plateauTol.value) || 0.05);
+        const ck = computeChecks(run.res, defaultPlateau(run.res), Number(el.plateauTol.value) || 0.05);
         const mark = ok => ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
         const weights = `λE ${p.lambda_e}, λθ ${p.lambda_p}, λτ ${p.beta}` + (run.res.backbone === 'kmedoids'
             ? `, λΛ ${p.gamma_block}, p ${p.p}` + (p.early_time_index >= 0 ? `, i_early ${p.early_time_index}` : '') : '');
@@ -1031,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', function () {
             $('comparePinnedInfo').innerHTML = runInfo(pin);
             note.textContent = pin === cur
                 ? 'The pinned run is the current run. Change data or parameters and run again to compare.'
-                : 'Plateau check uses the flattest regime of each run and the tolerance set on the Results tab.';
+                : 'Plateau check uses each run\'s default plateau regime (the derivative minimum after the hump) and the tolerance set on the Results tab.';
         } else {
             Plotly.purge('comparePinnedPlot');
             $('comparePinnedPlot').innerHTML = '<div class="empty-state" style="min-height:360px">Nothing pinned yet.</div>';
@@ -1057,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function addHistoryEntry(run, auto) {
         const res = run.res, p = run.params;
         const tol = Number(el.plateauTol.value) || 0.05;
-        const ck = computeChecks(res, flattestRegime(res), tol);
+        const ck = computeChecks(res, defaultPlateau(res), tol);
         const entry = {
             auto: !!auto,
             run: run.id,
