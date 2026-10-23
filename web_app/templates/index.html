@@ -24,9 +24,6 @@
             <button type="button" id="presentToggle" class="ghost-btn" aria-pressed="false" title="Larger text and markers for projecting">
                 <i class="fas fa-expand" aria-hidden="true"></i><span>Presentation mode</span>
             </button>
-            <button type="button" class="ghost-btn search-toggle" aria-controls="aiSidebar" aria-expanded="false">
-                <i class="fas fa-comment-dots" aria-hidden="true"></i><span>Ask AI</span>
-            </button>
             <a href="https://github.com/ssaeitt/semi-automated_k-clustering" target="_blank" rel="noopener" class="ghost-btn" title="Source code on GitHub">
                 <i class="fab fa-github" aria-hidden="true"></i><span>GitHub</span>
             </a>
@@ -125,6 +122,19 @@
 
                 <section class="rail-section">
                     <h2>Segments and clusters</h2>
+                    <div class="field" id="thinContainer">
+                        <label class="toggle" for="thinData">
+                            <input type="checkbox" id="thinData">
+                            <span class="toggle-track" aria-hidden="true"></span>
+                            <span>Thin by curve shape <button type="button" class="info-btn" data-info="thin" aria-label="About thinning">i</button></span>
+                        </label>
+                        <div class="info-pop tex2jax_ignore" id="info-thin">
+                            Keeps measured points spaced evenly along the derivative curve on the normalised plot, with more points
+                            where the curve bends. Long straight stretches (for example a unit-slope storage line) keep fewer points,
+                            so densely recorded data are treated like sparse data. No regime boundaries are assumed.
+                            The Results tab shows only the points that were kept.
+                        </div>
+                    </div>
                     <div class="slider-group" id="nClustersContainer">
                         <label for="nClusters"><span>Clusters \(k\) <button type="button" class="info-btn" data-info="k" aria-label="About the number of clusters">i</button></span><output id="n-clusters-val" class="slider-value">4</output></label>
                         <input type="range" id="nClusters" min="2" max="10" value="4" step="1">
@@ -196,14 +206,24 @@
                         </div>
                     </div>
 
-                    <div class="slider-group" id="earlyContainer">
-                        <label for="earlyTimeIndex"><span>\(i_{early}\) Early-time index <button type="button" class="info-btn" data-info="early" aria-label="About the early-time index">i</button></span><output id="early-val" class="slider-value">off</output></label>
-                        <input type="range" id="earlyTimeIndex" min="-1" max="10" value="-1" step="1">
-                        <div class="info-pop tex2jax_ignore" id="info-early">
-                            If an inverted-V block starts at segment index \(i \le i_{early}\) (the first segment is 0), the flag is
-                            extended back to the first segment, so the unit-slope rise before the hump joins the hump.
-                            At the far left the slider is off. The Segmentation tab shows which segments end up flagged.
+                    <fieldset class="slider-group backbone-selector" id="earlyContainer">
+                        <legend>Storage-block reach <button type="button" class="info-btn" data-info="early" aria-label="About the storage-block reach">i</button></legend>
+                        <div class="segmented three">
+                            <label><input type="radio" name="blockMode" value="off" checked><span>Hump only</span></label>
+                            <label><input type="radio" name="blockMode" value="index"><span>Fixed index</span></label>
+                            <label><input type="radio" name="blockMode" value="auto"><span>Automatic</span></label>
                         </div>
+                        <div class="info-pop tex2jax_ignore" id="info-early">
+                            How far back the inverted-V (storage) flag reaches. <b>Hump only</b>: just the flagged block.
+                            <b>Fixed index</b>: if the block starts at segment \(i \le i_{early}\) (the first segment is 0), the flag is extended
+                            back to the first segment. <b>Automatic</b>: the flag is extended back over the unbroken run of rising segments
+                            (\(m&gt;0\)) before the hump, however long it is, so the unit-slope rise joins the hump without a fixed index.
+                            The Segmentation tab shows which segments end up flagged.
+                        </div>
+                    </fieldset>
+                    <div class="slider-group" id="earlyIndexRow" hidden>
+                        <label for="earlyTimeIndex"><span>\(i_{early}\) Early-time index</span><output id="early-val" class="slider-value">4</output></label>
+                        <input type="range" id="earlyTimeIndex" min="0" max="10" value="4" step="1">
                     </div>
 
                     <details class="advanced" id="advancedBox">
@@ -251,7 +271,6 @@
                 <button class="tab active" role="tab" aria-selected="true" data-tab="preview">Preview</button>
                 <button class="tab" role="tab" data-tab="results" aria-disabled="true" data-reason="Run clustering first.">Results</button>
                 <button class="tab" role="tab" data-tab="segmentation" aria-disabled="true" data-reason="Run clustering first.">Segmentation</button>
-                <button class="tab" role="tab" data-tab="matrix" aria-disabled="true" data-reason="Run clustering first.">Dissimilarity</button>
                 <button class="tab" role="tab" data-tab="elbow" aria-disabled="true" data-reason="Available for the semi-automated method only.">Choosing k</button>
                 <button class="tab" role="tab" data-tab="compare" aria-disabled="true" data-reason="Run clustering first.">Compare</button>
                 <span class="tab-reason" id="tabReason" aria-live="polite"></span>
@@ -271,11 +290,6 @@
 
             <section class="tab-panel" id="panel-results">
                 <div class="plot-toolbar">
-                    <span class="toolbar-label">Guide lines</span>
-                    <label><input type="checkbox" class="guide-toggle" value="1"> m = 1</label>
-                    <label><input type="checkbox" class="guide-toggle" value="0.5"> m = ½</label>
-                    <label><input type="checkbox" class="guide-toggle" value="0"> m = 0</label>
-                    <span class="toolbar-hint">Click a point to move the lines through it.</span>
                     <button id="pinRun" class="secondary-btn small"><i class="fas fa-thumbtack" aria-hidden="true"></i> Pin for comparison</button>
                 </div>
                 <div class="results-layout">
@@ -298,18 +312,6 @@
                         <h3>Regimes</h3>
                         <div class="table-wrap"><table class="data-table" id="regimeTable"></table></div>
                     </div>
-                    <div class="panel">
-                        <h3>Permeability estimate <span class="muted">(optional)</span></h3>
-                        <p class="field-help">Oil, field units, from the median \(\Delta p'\) of the plateau regime:
-                            \(kh = 70.6\,qB\mu/\Delta p'\).</p>
-                        <div class="kh-grid">
-                            <label for="khQ">q (STB/d)</label><input type="number" id="khQ" min="0" step="any">
-                            <label for="khB">B (rb/STB)</label><input type="number" id="khB" min="0" step="any">
-                            <label for="khMu">μ (cp)</label><input type="number" id="khMu" min="0" step="any">
-                            <label for="khH">h (ft, optional)</label><input type="number" id="khH" min="0" step="any">
-                        </div>
-                        <div id="khResult" class="kh-result">Enter q, B and μ.</div>
-                    </div>
                 </div>
             </section>
 
@@ -317,22 +319,6 @@
                 <p class="panel-note">Each segment's straight-line fit of \(\ln\Delta p'\) against \(\ln\Delta t\); its slope \(m\) is what \(\lambda_\theta\) compares.
                     Dotted lines mark segment boundaries. Shaded segments were flagged by the inverted-V test (K-Medoids only).</p>
                 <div id="segPlot" class="plot"></div>
-            </section>
-
-            <section class="tab-panel" id="panel-matrix">
-                <div class="plot-toolbar" id="matrixToolbar">
-                    <label for="matrixTerm" class="toolbar-label">Show</label>
-                    <select id="matrixTerm">
-                        <option value="total">Total dissimilarity</option>
-                        <option value="E">λE · Euclidean term</option>
-                        <option value="P">λθ · Angular term</option>
-                        <option value="T">λτ · Temporal term</option>
-                        <option value="B">λΛ · Inverted-V term</option>
-                        <option value="C">δ · Concavity term</option>
-                    </select>
-                </div>
-                <p class="panel-note" id="matrixNote"></p>
-                <div id="matrixPlot" class="plot square"></div>
             </section>
 
             <section class="tab-panel" id="panel-elbow">
@@ -370,30 +356,6 @@
         </main>
     </div>
 
-    <aside class="search-sidebar" id="aiSidebar" aria-label="AI assistant">
-        <div class="search-header"><h2>Ask AI</h2><button class="close-sidebar icon-btn" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
-        <div class="search-content">
-            <div class="ai-search-container">
-                <div class="search-input-container">
-                    <input type="text" class="search-input" placeholder="Ask about well testing…" aria-label="Question">
-                    <button class="search-button" id="searchButton" aria-label="Ask"><i class="fas fa-paper-plane"></i></button>
-                    <button class="stop-button" id="stopButton" aria-label="Stop" style="display: none;"><i class="fas fa-stop"></i></button>
-                </div>
-                <div class="model-dropdown-container" id="modelDropdownContainer">
-                    <div class="model-dropdown-button" id="modelDropdownButton"><span id="selectedModel">{{ ai_models[0].label }}</span><i class="fas fa-chevron-down"></i></div>
-                    <div class="model-dropdown-menu" id="modelDropdownMenu">
-                        {% for m in ai_models %}
-                        <div class="model-option{% if loop.first %} selected{% endif %}" data-model="{{ m.id }}">{{ m.label }}</div>
-                        {% endfor %}
-                    </div>
-                </div>
-                <p class="field-help ai-warning">AI answers can be wrong. Check them against your course material.</p>
-            </div>
-            <div class="search-results"></div>
-        </div>
-    </aside>
-
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/search.js') }}"></script>
 </body>
 </html>

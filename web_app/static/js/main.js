@@ -18,8 +18,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const INK = '#1c2733';
     const MUTED = '#7a8591';
     const GRID = '#edf0f3';
-    const SEQ_BLUE = [[0, '#f4f9ff'], [0.15, '#cde2fb'], [0.35, '#86b6ef'], [0.55, '#3987e5'], [0.75, '#1c5cab'], [1, '#0d366b']];
-    const SEQ_RED = [[0, '#7a1f1f'], [0.4, '#c84141'], [0.75, '#efa3a3'], [1, '#fdf3f3']];
     const CENTER_TOL = 0.02;      // centre offset allowed, as a fraction of the ln Δp' range
     const HISTORY_KEY = 'fri_run_history_v1';
     const HISTORY_MAX = 300;
@@ -34,7 +32,6 @@ document.addEventListener('DOMContentLoaded', function () {
         data: null,          // {lndt, dp, dp_dlndt, name}
         current: null,       // last run: {id, res, data, params, dataset, time}
         pinned: null,
-        anchor: null,        // {t, y} point the guide lines pass through
         activeTab: 'preview',
         dirty: new Set(),
         history: loadHistory(),
@@ -56,7 +53,6 @@ document.addEventListener('DOMContentLoaded', function () {
         uploadReport: $('uploadReport'), previewType: $('previewType'),
         method: $('clusteringMethod'), runBtn: $('updatePlot'), runHint: $('runHint'),
         plateauRegime: $('plateauRegime'), plateauTol: $('plateauTol'),
-        matrixTerm: $('matrixTerm'),
     };
     const sliders = {
         nClusters: { el: $('nClusters'), out: $('n-clusters-val'), digits: 0 },
@@ -68,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function () {
         p: { el: $('p'), out: $('p-val'), digits: 0 },
         thresholdElbow: { el: $('thresholdElbow'), out: $('t-elbow-val'), digits: 2 },
         tau: { el: $('tau'), out: $('tau-val'), digits: 3 },
-        earlyTimeIndex: { el: $('earlyTimeIndex'), out: $('early-val'), format: v => (v < 0 ? 'off' : String(v)) },
+        earlyTimeIndex: { el: $('earlyTimeIndex'), out: $('early-val'), digits: 0 },
         delta: { el: $('delta'), out: $('delta-val'), digits: 2 },
         threshold: { el: $('threshold'), out: $('thr-val'), digits: 2 },
     };
@@ -219,6 +215,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const r = document.querySelector('input[name="backboneMethod"]:checked');
         return r ? r.value : 'kmeans';
     }
+    function currentBlockMode() {
+        const r = document.querySelector('input[name="blockMode"]:checked');
+        return r ? r.value : 'off';
+    }
+    // Storage-block reach as sent to the server: -1 (hump only), an index, or 'auto'.
+    function earlyParam() {
+        const mode = currentBlockMode();
+        return mode === 'auto' ? 'auto' : mode === 'index' ? Number(sliders.earlyTimeIndex.el.value) : -1;
+    }
+    function earlyLabel(p) {
+        const e = p.early_time_index;
+        if (e === 'auto') return 'auto';
+        return (e !== undefined && e !== null && Number(e) >= 0) ? String(e) : null;
+    }
     function currentKRule() {
         const r = document.querySelector('input[name="kRule"]:checked');
         return r ? r.value : 'elbow';
@@ -234,7 +244,8 @@ document.addEventListener('DOMContentLoaded', function () {
         $('elbowThresholdContainer').hidden = rule !== 'elbow';
         $('tauContainer').hidden = rule !== 'marginal_gain';
         $('gammaContainer').hidden = !medoids;
-        $('additionalParamsBox').hidden = !medoids;   // V-size, early-time index, Advanced
+        $('additionalParamsBox').hidden = !medoids;   // V-size, storage-block reach, Advanced
+        $('earlyIndexRow').hidden = currentBlockMode() !== 'index';
         $('kmeansNote').hidden = medoids;
         // Close tooltips belonging to hidden controls.
         document.querySelectorAll('.info-pop.open').forEach(pop => {
@@ -243,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     el.method.addEventListener('change', () => { handleMethodChange(); scheduleRun(); });
-    document.querySelectorAll('input[name="backboneMethod"], input[name="kRule"]').forEach(r => r.addEventListener('change', () => { handleMethodChange(); scheduleRun(); }));
+    document.querySelectorAll('input[name="backboneMethod"], input[name="kRule"], input[name="blockMode"], #thinData').forEach(r => r.addEventListener('change', () => { handleMethodChange(); scheduleRun(); }));
     handleMethodChange();
 
     function collectParams() {
@@ -261,7 +272,8 @@ document.addEventListener('DOMContentLoaded', function () {
             threshold: v('threshold'),
             threshold_elbow: v('thresholdElbow'),
             tau: v('tau'),
-            early_time_index: v('earlyTimeIndex'),
+            early_time_index: earlyParam(),
+            thin: $('thinData').checked ? 'curve' : 'off',
         };
         if (params.method === 'semi_automated') {
             params.backbone_method = currentBackbone();
@@ -285,7 +297,13 @@ document.addEventListener('DOMContentLoaded', function () {
         set('lambdaE', p.lambda_e); set('lambdaP', p.lambda_p); set('beta', p.beta);
         set('gammaBlock', p.gamma_block); set('p', p.p); set('delta', p.delta);
         set('threshold', p.threshold); set('thresholdElbow', p.threshold_elbow);
-        set('tau', p.tau); set('earlyTimeIndex', p.early_time_index === undefined ? -1 : p.early_time_index);
+        set('tau', p.tau);
+        const e = p.early_time_index;
+        const mode = e === 'auto' ? 'auto' : (e !== undefined && e !== null && Number(e) >= 0) ? 'index' : 'off';
+        const mr = document.querySelector(`input[name="blockMode"][value="${mode}"]`);
+        if (mr) mr.checked = true;
+        if (mode === 'index') set('earlyTimeIndex', Number(e));
+        $('thinData').checked = p.thin === 'curve';
         handleMethodChange();
     }
 
@@ -296,7 +314,6 @@ document.addEventListener('DOMContentLoaded', function () {
         preview: renderPreview,
         results: renderResults,
         segmentation: renderSegmentation,
-        matrix: renderMatrix,
         elbow: renderElbow,
         compare: renderCompare,
     };
@@ -392,7 +409,6 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const res = await requestJSON('/upload', { method: 'POST', body: fd });
             state.data = Object.assign({ name: res.name }, res.data);
-            state.anchor = null;
             showUploadReport(res);
             el.runBtn.disabled = false;
             el.runHint.textContent = $('autoUpdate').checked ? 'Results update after each change.' : 'Press Run clustering after changing settings.';
@@ -514,16 +530,18 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             if (seq !== state.seq) return;              // a newer request has been sent
             state.runCounter += 1;
-            state.current = { id: state.runCounter, res, data: state.data, params, dataset: name, time: new Date() };
+            // With thinning on, the server returns the points it kept; plots and checks use those.
+            const used = res.data_used ? Object.assign({ name }, res.data_used) : state.data;
+            state.current = { id: state.runCounter, res, data: used, params, dataset: name, time: new Date() };
             populatePlateauSelect();
             ['results', 'segmentation', 'compare'].forEach(n => setTabEnabled(n, true));
             setTabEnabled('elbow', !!res.elbow, 'Available for the semi-automated method only.');
-            setTabEnabled('matrix', !!res.matrix, res.matrix ? null : 'Too many segments to draw (more than 400). Use a larger window.');
             addHistoryEntry(state.current, auto);
-            invalidate(['results', 'segmentation', 'matrix', 'elbow', 'compare']);
-            if (state.activeTab === 'preview' || (state.activeTab === 'elbow' && !res.elbow) || (state.activeTab === 'matrix' && !res.matrix)) activateTab('results');
+            invalidate(['results', 'segmentation', 'elbow', 'compare']);
+            if (state.activeTab === 'preview' || (state.activeTab === 'elbow' && !res.elbow)) activateTab('results');
             clearError();
-            setStatus(`Run #${state.current.id}: ${methodLabel(state.current)}, k = ${res.k}`);
+            setStatus(`Run #${state.current.id}: ${methodLabel(state.current)}, k = ${res.k}`
+                + (res.thin && res.thin.mode !== 'off' ? `, ${res.thin.n_used} of ${res.thin.n_in} points after thinning` : ''));
         } catch (e) {
             if (e.name === 'AbortError' || seq !== state.seq) return;
             showError(state.current ? `${e.message} The plots still show the last successful run.` : e.message);
@@ -619,38 +637,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // ------------------------------------------------------------------
     // Results tab
     // ------------------------------------------------------------------
-    document.querySelectorAll('.guide-toggle').forEach(cb => cb.addEventListener('change', () => {
-        if (state.current) drawResultsPlot();
-    }));
-
-    function guideTraces(run) {
-        const checked = [...document.querySelectorAll('.guide-toggle:checked')].map(cb => Number(cb.value));
-        if (!checked.length) return [];
-        const d = run.data;
-        const t = d.lndt.map(Math.exp);
-        const tMin = Math.min(...t), tMax = Math.max(...t);
-        let anchor = state.anchor;
-        if (!anchor) {
-            const mid = Math.floor(t.length / 2);
-            anchor = { t: t[mid], y: d.dp_dlndt[mid] };
-        }
-        const names = { 1: 'm = 1 (unit slope)', 0.5: 'm = ½ (half slope)', 0: 'm = 0 (horizontal)' };
-        const dash = { 1: 'dash', 0.5: 'dot', 0: 'dashdot' };
-        return checked.map(m => {
-            const xs = [], ys = [];
-            for (let i = 0; i <= 40; i++) {
-                const x = tMin * Math.pow(tMax / tMin, i / 40);
-                xs.push(x);
-                ys.push(anchor.y * Math.pow(x / anchor.t, m));
-            }
-            return { x: xs, y: ys, type: 'scatter', mode: 'lines', name: names[m], hoverinfo: 'skip',
-                line: { color: '#444444', width: 1.5, dash: dash[m] } };
-        });
-    }
-
     function drawResultsPlot() {
         const run = state.current;
-        const traces = regimeTraces(run, { showDp: true }).concat(guideTraces(run));
+        const traces = regimeTraces(run, { showDp: true });
         const { shapes, annotations } = bandShapesAndLabels(run, true);
         const d = run.data;
         const allY = d.dp.concat(d.dp_dlndt);
@@ -662,17 +651,7 @@ document.addEventListener('DOMContentLoaded', function () {
             shapes, annotations,
             margin: { l: 70, r: 20, t: 70, b: 60 },
         });
-        const div = $('resultsPlot');
-        draw(div, traces, layout);
-        if (!div._anchorBound) {
-            div._anchorBound = true;
-            div.on('plotly_click', ev => {
-                const pt = ev.points && ev.points[0];
-                if (!pt || !document.querySelector('.guide-toggle:checked')) return;
-                state.anchor = { t: pt.x, y: pt.y };
-                drawResultsPlot();
-            });
-        }
+        draw('resultsPlot', traces, layout);
     }
 
     function renderResults() {
@@ -681,7 +660,6 @@ document.addEventListener('DOMContentLoaded', function () {
         drawResultsPlot();
         renderRegimeTable(run);
         renderChecks();
-        renderKh();
     }
 
     function renderRegimeTable(run) {
@@ -699,7 +677,7 @@ document.addEventListener('DOMContentLoaded', function () {
         $('regimeTable').innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
     }
 
-    // Default plateau regime for the checks and kh: the regime at the first derivative
+    // Default plateau regime for the physics checks: the regime at the first derivative
     // minimum after the wellbore-storage hump (segment slopes: first + then -, then the
     // next - then +), which is where IARF sits. The slope of one line fitted through a
     // whole regime is not used: the WBS hump rises and falls, so that fit is near zero
@@ -773,31 +751,13 @@ document.addEventListener('DOMContentLoaded', function () {
             `Largest offset: ${regimeName(z.worst)}, ${(100 * z.offset).toFixed(1)}%.`
             + (z.kind === 'centroid' ? ' K-Means centroids are averages, so they can lie off the measured curve.' : ' Medoids are real segments, so they sit on the data.')));
         const left = run.data.lndt.length - run.res.leftover_start;
+        const th = run.res.thin;
+        if (th && th.mode !== 'off') items.push(`<li><span class="badge note">Note</span><span>Thinned by curve shape: ${th.n_used} of ${th.n_in} points used.</span></li>`);
         if (left > 0) items.push(`<li><span class="badge note">Note</span><span>${left} point(s) at late time were not clustered because ${run.data.lndt.length} is not a multiple of w = ${run.params.window_size}.</span></li>`);
         $('checksList').innerHTML = items.join('');
     }
-    el.plateauRegime.addEventListener('change', () => { renderChecks(); renderKh(); });
+    el.plateauRegime.addEventListener('change', renderChecks);
     el.plateauTol.addEventListener('input', renderChecks);
-
-    // kh = 70.6 q B mu / dp' (oil, field units)
-    ['khQ', 'khB', 'khMu', 'khH'].forEach(id => $(id).addEventListener('input', renderKh));
-    function renderKh() {
-        const out = $('khResult');
-        const run = state.current;
-        if (!run) return;
-        const q = Number($('khQ').value), B = Number($('khB').value), mu = Number($('khMu').value), h = Number($('khH').value);
-        const reg = run.res.regimes[Number(el.plateauRegime.value)];
-        if (!(q > 0 && B > 0 && mu > 0)) {
-            out.textContent = `Enter q, B and μ. Plateau Δp′ for ${regimeName(reg.cluster)} = ${fmt(reg.dpd_median, 4)}.`;
-            return;
-        }
-        const kh = 70.6 * q * B * mu / reg.dpd_median;
-        let html = `Δp′ (median of ${regimeName(reg.cluster)}) = ${fmt(reg.dpd_median, 4)} psi<br>`
-            + `<strong>kh = ${fmt(kh, 1)} md·ft</strong>`;
-        if (h > 0) html += `<br><strong>k = ${fmt(kh / h, 2)} md</strong>`;
-        if (Math.abs(reg.slope_fit) > 0.1) html += `<br><span class="warn">${regimeName(reg.cluster)} has slope m = ${fmt(reg.slope_fit, 2)}; kh is only meaningful on the radial-flow plateau (m ≈ 0).</span>`;
-        out.innerHTML = html;
-    }
 
     // ------------------------------------------------------------------
     // Segmentation tab
@@ -844,74 +804,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const flagged = wins.filter(w => w.inverted_block).length;
         const title = `${wins.length} segments of w = ${run.params.window_size} points`
             + (res.backbone === 'kmedoids' ? `, ${flagged} flagged as inverted-V (p = ${run.params.p}`
-                + (run.params.early_time_index >= 0 ? `, early-time index ${run.params.early_time_index})` : ')') : '');
+                + (earlyLabel(run.params) ? `, reach ${earlyLabel(run.params) === 'auto' ? 'automatic' : 'index ' + earlyLabel(run.params)})` : ')') : '');
         draw('segPlot', traces, baseLayout({
             title: { text: title }, shapes,
             xaxis: axis('Δt (hr)', 'log'), yaxis: axis('Δp′', 'log'),
         }));
-    }
-
-    // ------------------------------------------------------------------
-    // Dissimilarity tab
-    // ------------------------------------------------------------------
-    el.matrixTerm.addEventListener('change', renderMatrix);
-
-    function renderMatrix() {
-        const run = state.current;
-        if (!run || !run.res.matrix) return;
-        const m = run.res.matrix;
-        const composite = m.kind === 'composite';
-        $('matrixToolbar').hidden = !composite;
-        const term = composite ? el.matrixTerm.value : 'total';
-        const z = term === 'total' ? m.total : m.terms[term];
-        const negative = term === 'B' || term === 'C';
-        const n = z.length;
-        const idx = Array.from({ length: n }, (_, i) => i + 1);
-        const labels = run.res.windows.map(w => regimeName(w.cluster));
-        const custom = z.map((row, i) => row.map((_, j) => [labels[i], labels[j]]));
-
-        // Lines where the cluster label changes, to show the block structure.
-        const shapes = [];
-        run.res.windows.forEach((w, i) => {
-            if (i > 0 && w.cluster !== run.res.windows[i - 1].cluster) {
-                const pos = i + 0.5;
-                shapes.push({ type: 'line', x0: pos, x1: pos, y0: 0.5, y1: n + 0.5, line: { color: '#ffffff', width: 1.5 } });
-                shapes.push({ type: 'line', y0: pos, y1: pos, x0: 0.5, x1: n + 0.5, line: { color: '#ffffff', width: 1.5 } });
-            }
-        });
-        const termNames = { total: 'Total dissimilarity', E: 'λE · Euclidean', P: 'λθ · Angular', T: 'λτ · Temporal', B: 'λΛ · Inverted-V', C: 'δ · Concavity' };
-        const title = composite ? termNames[term] : 'K-Means: distance between weighted feature vectors';
-        draw('matrixPlot', [{
-            z, x: idx, y: idx, type: 'heatmap', customdata: custom,
-            colorscale: negative ? SEQ_RED : SEQ_BLUE,
-            colorbar: { title: { text: negative ? 'reduction' : 'distance', side: 'right' }, thickness: 14 },
-            hovertemplate: 'segment %{y} (%{customdata[0]}) vs %{x} (%{customdata[1]})<br>value = %{z:.3f}<extra></extra>',
-        }], baseLayout({
-            title: { text: title }, shapes,
-            xaxis: axis('segment index', 'linear', { constrain: 'domain', showgrid: false }),
-            yaxis: axis('segment index', 'linear', { autorange: 'reversed', scaleanchor: 'x', showgrid: false }),
-            margin: { l: 70, r: 20, t: 50, b: 60 },
-        }));
-
-        let note;
-        if (!composite) {
-            note = 'K-Means does not use a pairwise matrix; it measures Euclidean distance from each segment\'s weighted feature vector to the cluster centroids. '
-                + 'This heatmap shows the same distance between segments so you can compare it with the K-Medoids dissimilarity.';
-        } else {
-            const notes = {
-                total: 'Darker = more dissimilar. White lines separate clusters, so a good result shows light squares along the diagonal.',
-                E: 'Distance between the normalised segment points.',
-                P: 'Difference between segment slope angles, divided by 90°.',
-                T: 'Grows with the gap in time between segments; zero for neighbours. This is what discourages split regimes.',
-                B: 'Negative where both segments are in an inverted-V block (shaded in the Segmentation tab); it reduces their dissimilarity.',
-                C: 'Negative only for neighbouring segments whose curvature test passes.',
-            };
-            note = notes[term];
-            if (term === 'total' && m.override_pairs) {
-                note += ` ${m.override_pairs} neighbouring pair(s) had both |m| < m₀ = ${fmt(run.params.threshold, 2)}, so their value is 0.1·λE·d̃E instead of the weighted sum.`;
-            }
-        }
-        $('matrixNote').textContent = note;
     }
 
     // ------------------------------------------------------------------
@@ -1028,9 +925,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const ck = computeChecks(run.res, defaultPlateau(run.res), Number(el.plateauTol.value) || 0.05);
         const mark = ok => ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
         const weights = `λE ${p.lambda_e}, λθ ${p.lambda_p}, λτ ${p.beta}` + (run.res.backbone === 'kmedoids'
-            ? `, λΛ ${p.gamma_block}, p ${p.p}` + (p.early_time_index >= 0 ? `, i_early ${p.early_time_index}` : '') : '');
+            ? `, λΛ ${p.gamma_block}, p ${p.p}` + (earlyLabel(p) ? `, i_early ${earlyLabel(p)}` : '') : '');
         return `<dl>
-            <dt>Data</dt><dd>${escapeHtml(run.dataset)}</dd>
+            <dt>Data</dt><dd>${escapeHtml(run.dataset)}${run.params.thin === 'curve' ? ` (thinned, ${run.data.lndt.length} points)` : ''}</dd>
             <dt>Method</dt><dd>${escapeHtml(methodLabel(run))}</dd>
             <dt>k, w</dt><dd>${run.res.k}${p.method === 'semi_automated' ? ` (${escapeHtml(ruleLabel(p))})` : ''}, ${p.window_size}</dd>
             <dt>Weights</dt><dd>${weights}</dd>
@@ -1130,10 +1027,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const k = semi ? `${r.k}${r.k_detected === false ? '*' : ''}` : r.k;
             return `<tr>
                 <td>${r.run}</td><td class="left">${new Date(r.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                <td class="left">${escapeHtml(r.dataset)}</td><td class="left">${escapeHtml(method)}</td>
+                <td class="left">${escapeHtml(r.dataset)}${p.thin === 'curve' ? ' · thinned' : ''}</td><td class="left">${escapeHtml(method)}</td>
                 <td title="${r.k_detected === false ? (p.k_rule === 'marginal_gain' ? 'k = 1: no cluster reached τ' : 'fallback k: no elbow detected') : ''}">${k}</td><td>${p.window_size}</td>
                 <td>${p.lambda_e}</td><td>${p.lambda_p}</td><td>${p.beta}</td>
-                <td>${med ? p.gamma_block : '–'}</td><td>${med ? p.p : '–'}</td><td>${med && p.early_time_index >= 0 ? p.early_time_index : '–'}</td>
+                <td>${med ? p.gamma_block : '–'}</td><td>${med ? p.p : '–'}</td><td>${med && earlyLabel(p) ? earlyLabel(p) : '–'}</td>
                 <td class="left">${semi ? escapeHtml(ruleLabel(p)) : '–'}</td>
                 <td>${med ? p.delta : '–'}</td><td>${med ? p.threshold : '–'}</td>
                 <td class="${r.plateau_pass ? 'ok' : 'bad'}" title="${r.plateau_regime}, tolerance ${r.plateau_tol}">${tick(r.plateau_pass)} ${fmt(r.plateau_slope, 3)}</td>
@@ -1161,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     $('exportHistory').addEventListener('click', () => {
-        const cols = ['run', 'time', 'dataset', 'method', 'backbone', 'k', 'k_detected',
+        const cols = ['run', 'time', 'dataset', 'thinning', 'method', 'backbone', 'k', 'k_detected',
             'window_size', 'n_clusters_requested', 'lambda_e', 'lambda_theta', 'lambda_tau', 'lambda_Lambda', 'p_vsize',
             'early_time_index', 'k_rule', 'm_ratio', 'tau', 'delta', 'm0_near_zero_slope',
             'plateau_regime', 'plateau_slope', 'plateau_tol', 'plateau_pass',
@@ -1170,10 +1067,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const semi = r => r.method === 'semi_automated';
         const rows = state.history.map(r => {
             const p = r.params;
-            return [r.run, r.time, r.dataset, r.method, r.backbone, r.k, r.k_detected === null ? '' : r.k_detected,
+            return [r.run, r.time, r.dataset, p.thin === 'curve' ? 'curve' : 'off', r.method, r.backbone, r.k, r.k_detected === null ? '' : r.k_detected,
                 p.window_size, semi(r) ? '' : p.n_clusters, p.lambda_e, p.lambda_p, p.beta,
                 med(r) ? p.gamma_block : '', med(r) ? p.p : '',
-                med(r) && p.early_time_index >= 0 ? p.early_time_index : '',
+                med(r) && earlyLabel(p) ? earlyLabel(p) : '',
                 semi(r) ? (p.k_rule || 'elbow') : '',
                 semi(r) && p.k_rule !== 'marginal_gain' ? p.threshold_elbow : '',
                 semi(r) && p.k_rule === 'marginal_gain' ? p.tau : '',

@@ -5,57 +5,20 @@ arrays to the browser, and every /cluster request carries the data it should
 cluster. This keeps students' datasets separate when many people use the app
 at once (the previous version stored one global dataset for everybody).
 """
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import numpy as np
-import os
-import json
 import traceback
-import requests
-from dotenv import load_dotenv
 from sklearn_extra.cluster import KMedoids
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import auxiliary_functions as cf  # noqa: F401  (kept for parity with the scripts)
 
-load_dotenv()
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB uploads
 
 REQUIRED_COLUMNS = ['lndt', 'dp', 'dp_dlndt']
 MAX_POINTS = 20000
-MAX_MATRIX_WINDOWS = 400  # above this the dissimilarity heatmap is not sent
-
-# ---------------------------------------------------------------------------
-# AI assistant configuration (OpenRouter)
-# ---------------------------------------------------------------------------
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-
-
-def _ai_models():
-    """Models offered in the AI sidebar. Override with OPENROUTER_MODELS="id|Label,id|Label"."""
-    raw = os.getenv('OPENROUTER_MODELS')
-    if raw:
-        models = []
-        for item in raw.split(','):
-            if '|' in item:
-                mid, label = item.split('|', 1)
-                models.append({'id': mid.strip(), 'label': label.strip()})
-        if models:
-            return models
-    return [
-        {'id': 'deepseek/deepseek-r1:free', 'label': 'DeepSeek R1-free'},
-        {'id': 'qwen/qwq-32b:free', 'label': 'Qwen 32B-free'},
-    ]
-
-
-AI_MODELS = _ai_models()
-AI_SYSTEM_PROMPT = (
-    "You are a teaching assistant for a graduate course on pressure transient analysis "
-    "(well testing). Answer clearly, state assumptions and units, and say when you are unsure."
-)
-
 
 class DataError(ValueError):
     """A problem with the user's data that should be shown to them as-is."""
@@ -172,20 +135,60 @@ def create_windows(data_norm, data_real, window_size):
 def assign_inverted_v_block(windows, p, early_time_index=None):
     """Mark every block of p windows that contains an inverted V (slope + then -).
 
-    early_time_index (same logic as clustering_with_custom_dissimilarity_metric.py):
-    if the inverted V is found in a block starting at window i <= early_time_index,
-    the flag is extended back to window 0, so the unit-slope rise before the hump
-    joins the hump. None = off (original web-app behaviour).
+    early_time_index controls how far back the storage (WBS) block reaches:
+      None   - only the block itself (original web-app behaviour);
+      int n  - same logic as clustering_with_custom_dissimilarity_metric.py: if the
+               inverted V is found in a block starting at window i <= n, the flag is
+               extended back to window 0;
+      'auto' - the flag is extended back over the unbroken run of rising windows
+               (slope > 0) before the block, however long it is. No constant, and it
+               does not depend on where the hump happens to fall.
     """
     for w in windows:
         w['inverted_block'] = False
     for i in range(len(windows) - p + 1):
         block = windows[i:i + p]
         if any(block[j]['slope'] > 0 and block[j + 1]['slope'] < 0 for j in range(p - 1)):
-            start = 0 if (early_time_index is not None and i <= early_time_index) else i
+            if early_time_index == 'auto':
+                start = i
+                while start > 0 and windows[start - 1]['slope'] > 0:
+                    start -= 1
+            elif early_time_index is not None and i <= early_time_index:
+                start = 0
+            else:
+                start = i
             for j in range(start, i + p):
                 windows[j]['inverted_block'] = True
     return windows
+
+
+# Thinning by curve shape. Points are spaced evenly along the derivative curve in the
+# same [-1, 1] x [-1, 1] box the model uses, with extra density where the curve bends,
+# so long straight stretches (e.g. a unit-slope storage line) keep fewer points and the
+# point density no longer depends on how the data were recorded. Only measured points
+# are kept (the nearest one to each target position). The step keeps about 97 of the
+# 309 points of the original KAPPA curves, the point count of the PanSystem example.
+# Tested on the five PanSystem/KAPPA curves and the three datafile.xlsx sheets: steps of
+# 0.062-0.064 give the same regime counts; 0.063 sits in the middle.
+THIN_STEP = 0.063
+THIN_BEND_WEIGHT = 1.0
+
+
+def thin_by_curve(lndt, ln_dpd, step=THIN_STEP, bend_weight=THIN_BEND_WEIGHT):
+    """Indices of the points kept when thinning by curve length plus bend weight."""
+    X, Y = minmax(lndt), minmax(ln_dpd)
+    ds = np.hypot(np.diff(X), np.diff(Y))
+    if bend_weight > 0 and len(ds) >= 2:
+        theta = np.arctan2(np.diff(Y), np.diff(X))
+        dth = np.abs(np.diff(theta))
+        dth = np.minimum(dth, 2 * np.pi - dth)
+        turn = np.r_[dth[0], (dth[:-1] + dth[1:]) / 2, dth[-1]] / np.maximum(ds, 1e-12)
+        turn = np.convolve(turn, np.ones(5) / 5, mode='same')
+        if np.mean(turn) > 0:
+            ds = ds * (1 + bend_weight * turn / np.mean(turn))
+    s = np.r_[0.0, np.cumsum(ds)]
+    targets = np.arange(0.0, s[-1] + 1e-12, step)
+    return np.array(sorted({int(np.abs(s - t).argmin()) for t in targets}))
 
 
 def marginal_gain_k(scores, tau):
@@ -202,7 +205,7 @@ def marginal_gain_k(scores, tau):
 def dissimilarity_terms(windows, le, lp, b, gb, delta, threshold):
     """Vectorised version of the composite K-Medoids dissimilarity.
 
-    Returns the total matrix and each weighted term so students can inspect them.
+    Returns the total matrix, each weighted term and the near-flat override mask.
     Same rules as the original pairwise function:
       total = max(lE*dE + lT*dT + ltau*dtau + concave + block, 0), except that two
       adjacent windows with |m| < threshold get 0.1*lE*dE.
@@ -289,7 +292,7 @@ def r(x, nd=4):
 # ---------------------------------------------------------------------------
 @app.route('/')
 def index():
-    return render_template('index.html', ai_models=AI_MODELS)
+    return render_template('index.html')
 
 
 @app.route('/sheets', methods=['POST'])
@@ -330,7 +333,6 @@ def cluster():
         body = request.get_json(silent=True) or {}
         params = body.get('params') or {}
         lndt, dp, dpd = arrays_from_payload(body.get('data'))
-        ln_dpd = np.log(dpd)
 
         method = params.get('method', 'kmeans')
         if method not in ('kmeans', 'kmedoids', 'semi_automated'):
@@ -350,12 +352,22 @@ def cluster():
         if k_rule not in ('elbow', 'marginal_gain'):
             raise DataError(f"Unknown k selection rule '{k_rule}'.")
         tau = float(params.get('tau', 0.04))
-        early = params.get('early_time_index', None)     # None, '' or a negative value = off
-        early = None if early in (None, '') or int(early) < 0 else int(early)
+        early = params.get('early_time_index', None)     # None, '' or a negative value = off; 'auto'
+        if early != 'auto':
+            early = None if early in (None, '') or int(early) < 0 else int(early)
+        thin = params.get('thin', 'off')                  # 'off' or 'curve'
+        if thin not in ('off', 'curve'):
+            raise DataError(f"Unknown thinning option '{thin}'.")
         w_size = int(params.get('window_size', 5))
         p = int(params.get('p', 4))
         if min(le, lp, b, gb) < 0:
             raise DataError("Weights must be zero or positive.")
+
+        n_in = len(lndt)
+        if thin == 'curve' and n_in >= 10:
+            keep = thin_by_curve(lndt, np.log(dpd))
+            lndt, dp, dpd = lndt[keep], dp[keep], dpd[keep]
+        ln_dpd = np.log(dpd)
 
         n_pts = len(lndt)
         if w_size < 2 or w_size > n_pts // 2:
@@ -368,7 +380,7 @@ def cluster():
         if backbone == 'kmedoids':
             assign_inverted_v_block(windows, p, early)
 
-        dist_mat, terms, override = dissimilarity_terms(windows, le, lp, b, gb, delta, threshold)
+        dist_mat, _, _ = dissimilarity_terms(windows, le, lp, b, gb, delta, threshold)
         feats = None
         if backbone == 'kmeans':
             if le == 0 and lp == 0 and b == 0:
@@ -460,17 +472,6 @@ def cluster():
                 'dpd_median': float(np.median(dpd[idxs])),
             })
 
-        matrix = None
-        if n_w <= MAX_MATRIX_WINDOWS:
-            if backbone == 'kmedoids':
-                matrix = {'kind': 'composite',
-                          'total': np.round(dist_mat, 4).tolist(),
-                          'terms': {k2: np.round(v, 4).tolist() for k2, v in terms.items()},
-                          'override_pairs': int(override.sum() // 2)}
-            else:
-                fd = np.sqrt(((feats[:, None, :] - feats[None, :, :]) ** 2).sum(axis=2))
-                matrix = {'kind': 'feature', 'total': np.round(fd, 4).tolist(), 'terms': None}
-
         out_windows = [{
             'index': w['index'], 'start': w['start'], 'end': w['end'],
             'slope': r(w['slope']), 'intercept': r(w['intercept'], 6),
@@ -485,69 +486,16 @@ def cluster():
                          'window': c['window'], 'offset_frac': r(c['offset_frac'], 5)} for c in centers],
             'center_kind': center_kind,
             'regimes': regimes,
-            'matrix': matrix,
             'elbow': elbow,
+            'thin': {'mode': thin, 'n_in': int(n_in), 'n_used': int(n_pts)},
+            'data_used': ({'lndt': lndt.round(10).tolist(), 'dp': dp.round(10).tolist(), 'dp_dlndt': dpd.round(10).tolist()}
+                          if thin != 'off' else None),
         })
     except DataError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'Clustering failed: {type(e).__name__}: {e}'}), 500
-
-
-@app.route('/ai_search', methods=['POST'])
-def ai_search():
-    body = request.get_json(silent=True) or {}
-    query = (body.get('query') or '').strip()
-    if not query:
-        return jsonify({'error': 'Please type a question.'}), 400
-    allowed = {m['id'] for m in AI_MODELS}
-    model = body.get('model') if body.get('model') in allowed else AI_MODELS[0]['id']
-    if not OPENROUTER_API_KEY:
-        return jsonify({'error': 'The AI assistant is not configured on this server (OPENROUTER_API_KEY is missing).'}), 503
-
-    headers = {'Authorization': f'Bearer {OPENROUTER_API_KEY}', 'Content-Type': 'application/json'}
-    payload = {'model': model, 'stream': True,
-               'messages': [{'role': 'system', 'content': AI_SYSTEM_PROMPT},
-                            {'role': 'user', 'content': query}]}
-    try:
-        upstream = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, stream=True, timeout=(10, 120))
-    except requests.RequestException as e:
-        return jsonify({'error': f'Could not reach the AI service: {e}'}), 502
-    if upstream.status_code != 200:
-        try:
-            msg = upstream.json().get('error', {}).get('message') or upstream.text[:300]
-        except Exception:
-            msg = upstream.text[:300]
-        upstream.close()
-        return jsonify({'error': f'AI service error ({upstream.status_code}): {msg}'}), 502
-
-    def generate():
-        try:
-            for raw in upstream.iter_lines(decode_unicode=True):
-                if not raw or not raw.startswith('data:'):
-                    continue  # blank lines and ": OPENROUTER PROCESSING" keep-alives
-                chunk = raw[5:].strip()
-                if chunk == '[DONE]':
-                    break
-                try:
-                    obj = json.loads(chunk)
-                except ValueError:
-                    continue
-                if 'error' in obj:
-                    msg = obj['error'].get('message', 'unknown error') if isinstance(obj['error'], dict) else str(obj['error'])
-                    yield json.dumps({'token_type': 'error', 'token': msg}) + '\n'
-                    break
-                for choice in obj.get('choices', []):
-                    d = choice.get('delta') or {}
-                    if d.get('reasoning'):
-                        yield json.dumps({'token_type': 'thinking', 'token': d['reasoning']}) + '\n'
-                    if d.get('content'):
-                        yield json.dumps({'token_type': 'answer', 'token': d['content']}) + '\n'
-        finally:
-            upstream.close()
-
-    return Response(stream_with_context(generate()), mimetype='application/x-ndjson')
 
 
 @app.errorhandler(413)
