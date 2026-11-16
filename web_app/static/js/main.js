@@ -840,6 +840,13 @@ document.addEventListener('DOMContentLoaded', function () {
             lowerTitle = 'rₖ = |ΔJₖ₊₁| / |ΔJₖ|';
             lowerRange = [0, 1.2 * Math.max(e.threshold, ...ratioV, 0.01)];
             cut = e.threshold; cutLabel = `m_ratio = ${e.threshold.toFixed(2)}`;
+            if (e.elbow_trigger_k !== null && e.elbow_trigger_k !== undefined) {
+                const it = e.k_values.indexOf(e.elbow_trigger_k);
+                traces.push({ x: [e.elbow_trigger_k], y: [e.ratios[it]], type: 'scatter', mode: 'markers',
+                    name: `first rₖ ≥ m_ratio (k = ${e.elbow_trigger_k})`,
+                    marker: { size: 16, color: 'rgba(0,0,0,0)', line: { color: INK, width: 2.5 } },
+                    hoverinfo: 'skip', xaxis: 'x2', yaxis: 'y2' });
+            }
         }
         const shapes = [
             { type: 'line', xref: 'x2', yref: 'y2', x0: e.k_values[0] - 0.5, x1: kMax + 0.5, y0: cut, y1: cut,
@@ -862,7 +869,7 @@ document.addEventListener('DOMContentLoaded', function () {
         draw('elbowPlot', traces, layout);
 
         // Explain the choice, and what the other rule would have picked.
-        const elbowOther = e.elbow_k === e.fallback_k && !e.ratios.some(r => r !== null && r < e.threshold)
+        const elbowOther = !e.elbow_detected
             ? `the slope-ratio elbow (m_ratio = ${e.threshold.toFixed(2)}) finds no elbow and would fall back to k = ${e.fallback_k}`
             : `the slope-ratio elbow (m_ratio = ${e.threshold.toFixed(2)}) would choose k = ${e.elbow_k}`;
         const gainOther = `the marginal-gain rule (τ = ${e.tau.toFixed(3)}) would choose k = ${e.gain_k}`;
@@ -878,11 +885,13 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } else if (e.detected) {
             banner.className = 'banner show info';
-            banner.textContent = `k = ${kOpt} was chosen: it is the first k where rₖ < m_ratio (r${sub(kOpt)} = ${e.ratios[iOpt].toFixed(3)} < ${e.threshold.toFixed(2)}). `
+            const kt = e.elbow_trigger_k, it = e.k_values.indexOf(kt);
+            banner.textContent = `k = ${kOpt} was chosen: it is the k just before the first ratio that reaches m_ratio `
+                + `(r${sub(kt)} = ${e.ratios[it].toFixed(3)} ≥ ${e.threshold.toFixed(2)}; all earlier ratios are below it). `
                 + `For comparison, ${gainOther}.`;
         } else {
             banner.className = 'banner show warn';
-            banner.textContent = `No k had rₖ < m_ratio = ${e.threshold.toFixed(2)}, so the app fell back to the default k = ${e.fallback_k}. `
+            banner.textContent = `No ratio reached m_ratio = ${e.threshold.toFixed(2)}, so the app fell back to the default k = ${e.fallback_k}. `
                 + `This k was not detected from the data. For comparison, ${gainOther}.`;
         }
     }

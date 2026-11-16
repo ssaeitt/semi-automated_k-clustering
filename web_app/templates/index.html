@@ -100,12 +100,14 @@
                     </fieldset>
 
                     <div class="slider-group" id="elbowThresholdContainer">
-                        <label for="thresholdElbow"><span>\(m_{ratio}\) Elbow slope ratio <button type="button" class="info-btn" data-info="mr" aria-label="About the elbow ratio">i</button></span><output id="t-elbow-val" class="slider-value">0.15</output></label>
-                        <input type="range" id="thresholdElbow" min="0.01" max="0.50" value="0.15" step="0.01">
+                        <label for="thresholdElbow"><span>\(m_{ratio}\) Elbow slope ratio <button type="button" class="info-btn" data-info="mr" aria-label="About the elbow ratio">i</button></span><output id="t-elbow-val" class="slider-value">0.75</output></label>
+                        <input type="range" id="thresholdElbow" min="0.05" max="1.00" value="0.75" step="0.01">
                         <div class="info-pop tex2jax_ignore" id="info-mr">
                             \[r_k=\frac{|J_{k+1}-J_k|}{|J_k-J_{k-1}|}\]
-                            \(J_k\) is the distortion with \(k\) clusters. The chosen \(k\) is the first one with \(r_k&lt;m_{ratio}\).
-                            If none qualifies, the app falls back to \(k=3\) and says so on the Choosing k tab.
+                            \(J_k\) is the distortion with \(k\) clusters. As \(r_k\) climbs towards 1, the next drop in \(J\) becomes as
+                            large as the previous one: the curve has stopped bending. The chosen \(k\) is the one just before the first \(k\)
+                            whose ratio reaches \(m_{ratio}\): \(k^*=\min\{k : r_k\ge m_{ratio}\}-1\).
+                            If no ratio reaches it, the app falls back to \(k=3\) and says so on the Choosing k tab.
                         </div>
                     </div>
 

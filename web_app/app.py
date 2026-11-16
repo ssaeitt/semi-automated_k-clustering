@@ -347,7 +347,7 @@ def cluster():
         gb = float(params.get('gamma_block', 1.0))
         delta = float(params.get('delta', 0.1))
         threshold = float(params.get('threshold', 0.1))
-        threshold_elbow = float(params.get('threshold_elbow', 0.15))
+        threshold_elbow = float(params.get('threshold_elbow', 0.75))
         k_rule = params.get('k_rule', 'elbow')          # 'elbow' (slope ratio) or 'marginal_gain'
         if k_rule not in ('elbow', 'marginal_gain'):
             raise DataError(f"Unknown k selection rule '{k_rule}'.")
@@ -393,15 +393,19 @@ def cluster():
             scores = [float(fit_model(backbone, k, dist_mat, feats).inertia_) for k in k_values]
             # Slope ratios are reported for both rules so they can be compared.
             ratios = [None] * len(k_values)
+            # Slope-ratio elbow: r_k = |J(k+1) - J(k)| / |J(k) - J(k-1)| compares the next drop with
+            # the previous one. As r_k climbs towards 1 the two drops become equal, so the cost curve
+            # has stopped bending and further clusters add no new structure. The chosen k is the one
+            # just before the first k whose ratio reaches m_ratio: k* = (first k with r_k >= m_ratio) - 1.
             fallback_k = min(3, n_w)
-            elbow_k, elbow_detected = fallback_k, False
+            elbow_k, elbow_detected, elbow_trigger_k = fallback_k, False, None
             for i in range(1, len(scores) - 1):
                 m1 = scores[i] - scores[i - 1]
                 m2 = scores[i + 1] - scores[i]
                 if m1 != 0:
                     ratios[i] = abs(m2) / abs(m1)
-                    if not elbow_detected and ratios[i] < threshold_elbow:
-                        elbow_k, elbow_detected = k_values[i], True
+                    if not elbow_detected and ratios[i] >= threshold_elbow:
+                        elbow_k, elbow_detected, elbow_trigger_k = k_values[i - 1], True, k_values[i]
             gain_k, gains = marginal_gain_k(scores, tau)
             if k_rule == 'marginal_gain':
                 k_opt, detected = gain_k, gain_k > 1
@@ -412,7 +416,8 @@ def cluster():
                      'ratios': ratios, 'threshold': threshold_elbow,
                      'gains': [None] + [float(gains[kk]) for kk in k_values[1:]], 'tau': tau,
                      'k_opt': int(k_opt), 'detected': detected, 'fallback_k': int(fallback_k),
-                     'elbow_k': int(elbow_k), 'gain_k': int(gain_k)}
+                     'elbow_k': int(elbow_k), 'elbow_detected': bool(elbow_detected),
+                     'elbow_trigger_k': elbow_trigger_k, 'gain_k': int(gain_k)}
         else:
             k = int(params.get('n_clusters', 3))
             if k < 1 or k > n_w:
