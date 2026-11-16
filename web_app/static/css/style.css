@@ -237,7 +237,6 @@ select { cursor: pointer; }
 .backbone-selector { border: none; }
 .backbone-selector legend { font-size: 0.85rem; color: var(--ink-2); margin-bottom: 0.35rem; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-.segmented.three { grid-template-columns: 1fr 1fr 1fr; }
 .segmented label { position: relative; cursor: pointer; }
 .segmented input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
 .segmented span { display: block; text-align: center; padding: 0.38rem 0.3rem; font-size: 0.88rem; color: var(--ink-2); }

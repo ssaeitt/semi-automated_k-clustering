@@ -64,7 +64,6 @@ document.addEventListener('DOMContentLoaded', function () {
         p: { el: $('p'), out: $('p-val'), digits: 0 },
         thresholdElbow: { el: $('thresholdElbow'), out: $('t-elbow-val'), digits: 2 },
         tau: { el: $('tau'), out: $('tau-val'), digits: 3 },
-        earlyTimeIndex: { el: $('earlyTimeIndex'), out: $('early-val'), digits: 0 },
         delta: { el: $('delta'), out: $('delta-val'), digits: 2 },
         threshold: { el: $('threshold'), out: $('thr-val'), digits: 2 },
     };
@@ -215,19 +214,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const r = document.querySelector('input[name="backboneMethod"]:checked');
         return r ? r.value : 'kmeans';
     }
-    function currentBlockMode() {
-        const r = document.querySelector('input[name="blockMode"]:checked');
-        return r ? r.value : 'off';
-    }
-    // Storage-block reach as sent to the server: -1 (hump only), an index, or 'auto'.
+    // Join the early rise to the hump: sent to the server as early_time_index 'auto' (on) or -1 (off).
     function earlyParam() {
-        const mode = currentBlockMode();
-        return mode === 'auto' ? 'auto' : mode === 'index' ? Number(sliders.earlyTimeIndex.el.value) : -1;
+        return $('joinRise').checked ? 'auto' : -1;
     }
-    function earlyLabel(p) {
+    // Runs saved before this switch existed may hold a numeric index; those count as on.
+    function riseJoined(p) {
         const e = p.early_time_index;
-        if (e === 'auto') return 'auto';
-        return (e !== undefined && e !== null && Number(e) >= 0) ? String(e) : null;
+        return e === 'auto' || (e !== undefined && e !== null && e !== '' && Number(e) >= 0);
     }
     function currentKRule() {
         const r = document.querySelector('input[name="kRule"]:checked');
@@ -245,7 +239,6 @@ document.addEventListener('DOMContentLoaded', function () {
         $('tauContainer').hidden = rule !== 'marginal_gain';
         $('gammaContainer').hidden = !medoids;
         $('additionalParamsBox').hidden = !medoids;   // V-size, storage-block reach, Advanced
-        $('earlyIndexRow').hidden = currentBlockMode() !== 'index';
         $('kmeansNote').hidden = medoids;
         // Close tooltips belonging to hidden controls.
         document.querySelectorAll('.info-pop.open').forEach(pop => {
@@ -254,7 +247,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     el.method.addEventListener('change', () => { handleMethodChange(); scheduleRun(); });
-    document.querySelectorAll('input[name="backboneMethod"], input[name="kRule"], input[name="blockMode"], #thinData').forEach(r => r.addEventListener('change', () => { handleMethodChange(); scheduleRun(); }));
+    document.querySelectorAll('input[name="backboneMethod"], input[name="kRule"], #joinRise, #thinData').forEach(r => r.addEventListener('change', () => { handleMethodChange(); scheduleRun(); }));
     handleMethodChange();
 
     function collectParams() {
@@ -298,11 +291,7 @@ document.addEventListener('DOMContentLoaded', function () {
         set('gammaBlock', p.gamma_block); set('p', p.p); set('delta', p.delta);
         set('threshold', p.threshold); set('thresholdElbow', p.threshold_elbow);
         set('tau', p.tau);
-        const e = p.early_time_index;
-        const mode = e === 'auto' ? 'auto' : (e !== undefined && e !== null && Number(e) >= 0) ? 'index' : 'off';
-        const mr = document.querySelector(`input[name="blockMode"][value="${mode}"]`);
-        if (mr) mr.checked = true;
-        if (mode === 'index') set('earlyTimeIndex', Number(e));
+        $('joinRise').checked = riseJoined(p);
         $('thinData').checked = p.thin === 'curve';
         handleMethodChange();
     }
@@ -804,7 +793,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const flagged = wins.filter(w => w.inverted_block).length;
         const title = `${wins.length} segments of w = ${run.params.window_size} points`
             + (res.backbone === 'kmedoids' ? `, ${flagged} flagged as inverted-V (p = ${run.params.p}`
-                + (earlyLabel(run.params) ? `, reach ${earlyLabel(run.params) === 'auto' ? 'automatic' : 'index ' + earlyLabel(run.params)})` : ')') : '');
+                + (riseJoined(run.params) ? ', early rise joined)' : ')') : '');
         draw('segPlot', traces, baseLayout({
             title: { text: title }, shapes,
             xaxis: axis('Δt (hr)', 'log'), yaxis: axis('Δp′', 'log'),
@@ -925,7 +914,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const ck = computeChecks(run.res, defaultPlateau(run.res), Number(el.plateauTol.value) || 0.05);
         const mark = ok => ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
         const weights = `λE ${p.lambda_e}, λθ ${p.lambda_p}, λτ ${p.beta}` + (run.res.backbone === 'kmedoids'
-            ? `, λΛ ${p.gamma_block}, p ${p.p}` + (earlyLabel(p) ? `, i_early ${earlyLabel(p)}` : '') : '');
+            ? `, λΛ ${p.gamma_block}, p ${p.p}` + (riseJoined(p) ? ', rise joined' : '') : '');
         return `<dl>
             <dt>Data</dt><dd>${escapeHtml(run.dataset)}${run.params.thin === 'curve' ? ` (thinned, ${run.data.lndt.length} points)` : ''}</dd>
             <dt>Method</dt><dd>${escapeHtml(methodLabel(run))}</dd>
@@ -1018,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', function () {
         $('clearHistory').disabled = h.length === 0;
         if (!h.length) { table.innerHTML = '<tbody><tr><td class="left muted">No runs yet.</td></tr></tbody>'; return; }
         const head = `<tr><th>#</th><th class="left">Time</th><th class="left">Data</th><th class="left">Method</th><th>k</th><th>w</th>
-            <th>λE</th><th>λθ</th><th>λτ</th><th>λΛ</th><th>p</th><th>i_early</th><th class="left">k rule</th><th>δ</th><th>m₀</th>
+            <th>λE</th><th>λθ</th><th>λτ</th><th>λΛ</th><th>p</th><th>Rise joined</th><th class="left">k rule</th><th>δ</th><th>m₀</th>
             <th>Plateau m</th><th>Contiguous</th><th>Centres</th><th></th></tr>`;
         const tick = ok => ok ? '✓' : '✗';
         const rows = h.slice().reverse().map((r, i) => {
@@ -1030,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td class="left">${escapeHtml(r.dataset)}${p.thin === 'curve' ? ' · thinned' : ''}</td><td class="left">${escapeHtml(method)}</td>
                 <td title="${r.k_detected === false ? (p.k_rule === 'marginal_gain' ? 'k = 1: no cluster reached τ' : 'fallback k: no elbow detected') : ''}">${k}</td><td>${p.window_size}</td>
                 <td>${p.lambda_e}</td><td>${p.lambda_p}</td><td>${p.beta}</td>
-                <td>${med ? p.gamma_block : '–'}</td><td>${med ? p.p : '–'}</td><td>${med && earlyLabel(p) ? earlyLabel(p) : '–'}</td>
+                <td>${med ? p.gamma_block : '–'}</td><td>${med ? p.p : '–'}</td><td>${med ? (riseJoined(p) ? 'on' : 'off') : '–'}</td>
                 <td class="left">${semi ? escapeHtml(ruleLabel(p)) : '–'}</td>
                 <td>${med ? p.delta : '–'}</td><td>${med ? p.threshold : '–'}</td>
                 <td class="${r.plateau_pass ? 'ok' : 'bad'}" title="${r.plateau_regime}, tolerance ${r.plateau_tol}">${tick(r.plateau_pass)} ${fmt(r.plateau_slope, 3)}</td>
@@ -1060,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('exportHistory').addEventListener('click', () => {
         const cols = ['run', 'time', 'dataset', 'thinning', 'method', 'backbone', 'k', 'k_detected',
             'window_size', 'n_clusters_requested', 'lambda_e', 'lambda_theta', 'lambda_tau', 'lambda_Lambda', 'p_vsize',
-            'early_time_index', 'k_rule', 'm_ratio', 'tau', 'delta', 'm0_near_zero_slope',
+            'rise_joined', 'k_rule', 'm_ratio', 'tau', 'delta', 'm0_near_zero_slope',
             'plateau_regime', 'plateau_slope', 'plateau_tol', 'plateau_pass',
             'contiguous_pass', 'extra_intervals', 'centers_pass', 'max_center_offset_pct'];
         const med = r => r.backbone === 'kmedoids';
@@ -1070,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return [r.run, r.time, r.dataset, p.thin === 'curve' ? 'curve' : 'off', r.method, r.backbone, r.k, r.k_detected === null ? '' : r.k_detected,
                 p.window_size, semi(r) ? '' : p.n_clusters, p.lambda_e, p.lambda_p, p.beta,
                 med(r) ? p.gamma_block : '', med(r) ? p.p : '',
-                med(r) && earlyLabel(p) ? earlyLabel(p) : '',
+                med(r) ? (riseJoined(p) ? 'on' : 'off') : '',
                 semi(r) ? (p.k_rule || 'elbow') : '',
                 semi(r) && p.k_rule !== 'marginal_gain' ? p.threshold_elbow : '',
                 semi(r) && p.k_rule === 'marginal_gain' ? p.tau : '',
